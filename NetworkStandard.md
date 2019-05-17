@@ -4,6 +4,8 @@ The following defines a specification for how the Loom peer network stack will b
 
 A key aspect of the Loom network design is the ability to power cycle the device and maintain network connectivity. This allows a device to hard power-down for extended periods of time, increasing battery life significantly.
 
+All numbers in this document are LSB-first.
+
 ## Components
 
 The Loom Network Peer Network Stack will be divided into 3 layers:
@@ -53,11 +55,11 @@ The network layer shall automatically handle packet passing if the device is not
 
 A Loom Network Stack shall assume that the MAC layer will allow transmission at any time to a coordinator, however no other device will have this capability.
 
-If the MAC layer indicates a transmission failure, the network can attempt to retry a transmission. After 5 consecutive failures, both the receiving node and the transmitting node are assumed to be operating incorrectly, and this information is sent to the coordinator and the MAC layer for further action. The data can be dropped or retransmitted at a later time. 
+If the MAC layer indicates a transmission failure, the network can attempt to retry a transmission during it's next allocated time slot. After 5 consecutive failures, both the receiving node and the transmitting node are assumed to be operating incorrectly, and this information is sent to the coordinator and the MAC layer for further action. The data can be dropped or retransmitted at a later time. If the packet dropped is in a sequence, the entire sequence is dropped.
 
 ### Application
 
-The Loom Network Stack shall allow for any arbitrary data to be sent/received by the device. To send data, a developer shall specify a destination and a payload. The address of the destination shall be a string, later converted to a unique two-byte address. A developer shall assume an arbitrary latency for any transmission, excluding transmissions to a coordinator. 
+The Loom Network Stack shall allow for any arbitrary data to be sent/received by the device. To send data, a developer shall specify a destination and a payload. The address of the destination shall be a string, later converted to a unique two-byte address. A developer shall assume an arbitrary latency for any transmission, excluding transmissions to a coordinator. In order to facilitate large data payloads, the network layer shall automatically split payloads, fragmenting and sequencing during transmission and reassembling on the other end.
 
 In order to use Loom Network Stack, the developer must provide a medium of storing data across a hard-reset. The loom network stack shall use this medium to store data across powered-off sleep states, hereafter referred to as sleep. 
 
@@ -80,17 +82,18 @@ The state of the network stack shall be determined by the MAC layer. The network
 
 The network shall format it's data as follows (this data will be surrounded by the MAC layer data):
 ```
------+--------------+-------------+---------+----------+---------+----
-     | Frame Length | Destination | Source  | Reserved | Payload |
-     | 8 Bits       | 16 Bits     | 16 Bits | 8 bits   | n bits  |
------+--------------+-------------+---------+----------+---------+----
+-----+--------------+-------------+---------+----------+----------+---------+----
+     | Frame Length | Destination | Source  | Sequence | Reserved | Payload |
+     | 8 Bits       | 16 Bits     | 16 Bits | 8 bits   | 8 bits   | n bits  |
+-----+--------------+-------------+---------+----------+----------+---------+----
 ```
 Where:
 * **Frame Length**: The size of the network packet in bytes (Frame Length + Destination + Source + Reserved + Payload). Unsigned byte, can be no more than 255.
 * **Destination**: The 16-bit address of the final destination.
 * **Source**: The 16-bit address of the original source (not to be confused with the current source, which is handled in the MAC layer).
+* **Sequence**: The number of packets remaining in a sequence of fragments, indexed from zero (ex. A two fragment sequence would have sequence numbers 1 and then 0).
 * **Reserved**: Discard.
-* **Payload**: A sequence of data bytes (no larger than 149 bytes long).
+* **Payload**: A sequence of data bytes (no larger than 246 bytes long).
 
 ## MAC
 
@@ -202,7 +205,7 @@ Information sent during a Data transaction shall be formatted as follows:
 ```
 +---------+----------------+---------+
 | Control | Network Packet | FCS     |
-| 8 Bits  | 56-255 Bytes   | 16 Bits |
+| 8 Bits  | 56-252 Bytes   | 16 Bits |
 +---------+----------------+---------+
 ```
 * **Control**

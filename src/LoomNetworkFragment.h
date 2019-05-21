@@ -6,22 +6,30 @@
  */
 class LoomNetworkFragment {
 public:
-	LoomNetworkFragment(const uint16_t dst_addr, const uint16_t src_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length)
+	static const uint16_t ADDR_NONE = 0;
+	
+	
+	explicit LoomNetworkFragment(const uint16_t dst_addr, const uint16_t src_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length, const uint16_t next_addr)
 		: m_dst_addr(dst_addr)
 		, m_src_addr(src_addr)
 		, m_seq(seq)
 		, m_payload{}
-		, m_payload_len(length) {
+		, m_payload_len(length)
+		, m_next_hop_addr(next_addr) {
 		// copy the payload
 		for (auto i = 0; i < length; i++) m_payload[i] = raw_payload[i];
 	}
 
-	LoomNetworkFragment(const uint8_t* raw_packet, const uint16_t max_length)
+	explicit LoomNetworkFragment(const uint8_t* raw_packet, const uint16_t max_length)
 		: LoomNetworkFragment(static_cast<uint16_t>(raw_packet[2] << 8) | raw_packet[1],
 			static_cast<uint16_t>(raw_packet[4] << 8) | raw_packet[3],
 			raw_packet[5],
 			&raw_packet[7],
-			raw_packet[0] - 6) {}
+			raw_packet[0] - 6,
+			ADDR_NONE) {}
+
+	explicit LoomNetworkFragment(const LoomNetworkFragment& rp, const uint16_t nexthop)
+		: LoomNetworkFragment(rp.m_dst_addr, rp.m_src_addr, rp.m_seq, rp.m_payload, rp.m_payload_len, nexthop) {}
 
 	uint16_t to_raw(uint8_t* buf, const uint16_t max_length) {
 		const uint8_t frame_length = m_payload_len + 6;
@@ -42,11 +50,13 @@ public:
 	uint8_t* get_payload() { return m_payload; }
 	const uint8_t* get_payload() const { return m_payload; }
 	uint8_t get_payload_length() const { return m_payload_len; }
+	uint16_t get_next_hop() const { return m_next_hop_addr; }
 
 private:
-	uint16_t m_dst_addr;
-	uint16_t m_src_addr;
-	uint8_t m_seq;
+	const uint16_t m_dst_addr;
+	const uint16_t m_src_addr;
+	const uint8_t m_seq;
 	uint8_t m_payload[149];
-	uint8_t m_payload_len;
+	const uint8_t m_payload_len;
+	const uint16_t m_next_hop_addr;
 };

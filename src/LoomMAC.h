@@ -1,18 +1,24 @@
 #pragma once
 #include <cstdint>
 #include "LoomNetworkFragment.h"
+#include "LoomTimeInterval.h"
 
-/** Loom Medium Access Control */
+/** 
+ * Loom Medium Access Control 
+ * Operates synchronously
+ */
 
 /** This class will serve entirely for simulation for now */
 
 class LoomMAC {
 public:
 
-	enum Status : uint8_t {
-		MAC_SLEEP_RDY = 1,
-		MAC_RECV_RDY = (1 << 2),
-		MAC_SEND_RDY = (1 << 3),
+	enum class State {
+		MAC_SLEEP_RDY,
+		MAC_DATA_SEND_RDY,
+		MAC_DATA_RECV_RDY,
+		MAC_WAIT_REFRESH,
+		MAC_CLOSED
 	};
 
 	enum class Error {
@@ -20,13 +26,17 @@ public:
 		SEND_FAILED,
 	};
 
-	Status get_status() const { return m_status; }
+	State get_state() const { return m_state; }
 	Error get_last_error() const { return m_last_error; }
 
-	void mac_sleep_wake_ack();
-
-	// avoid duplication?
-	bool send_fragment(const LoomNetworkFragment& frag)
+	void sleep_wake_ack();
+	LoomTimeInverval sleep_next_wake_time() const;
+	uint16_t get_cur_send_address() const;
+	bool send_fragment(const LoomNetworkFragment& frag);
+	bool send_pass();
+	uint16_t get_cur_recv_address() const;
+	LoomNetworkFragment recv_fragment();
+	bool check_for_refresh();
 
 private:
 	enum class InternalState {
@@ -34,7 +44,8 @@ private:
 		SLEEP_FOR_DATA,
 	};
 
-	Status m_status;
+	LoomNetworkFragment m_recv;
+	State m_state;
 	InternalState m_state;
 	Error m_last_error;
 

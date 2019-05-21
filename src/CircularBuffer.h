@@ -4,10 +4,9 @@
 #include <type_traits>
 
 /**
- * Templated implementation of a fixed-size dynamically expanding deque
+ * Templated implementation of a fixed-size deque
  * To be used as a stack in Loom Network
  *
- * This class assumes that the defualt ctor for the type works properly.
  */
 
 template<typename T, size_t max_size>
@@ -15,7 +14,7 @@ class CircularBuffer {
 public:
 
 	// create an aligned array type 
-	typedef typename std::aligned_storage<sizeof(T), alignof(T)>::type array_t;
+	using array_t = typename std::aligned_storage<sizeof(T), alignof(T)>::type;
 
 	CircularBuffer<T, max_size>()
 		: m_array{}
@@ -35,6 +34,9 @@ public:
 
 	size_t size() const { return m_length; }
 	size_t allocated() const { return max_size; }
+
+	bool full() const { return m_length == max_size; }
+	bool empty() const { return m_length == 0; }
 
 	const T& front() const { return operator[](m_start); }
 	T& front() { return operator[](m_start); }

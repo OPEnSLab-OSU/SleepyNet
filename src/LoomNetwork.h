@@ -3,7 +3,6 @@
 #include "ArduinoJson.h"
 #include "CircularBuffer.h"
 #include "LoomNetworkFragment.h"
-#include "LoomNetworkData.h"
 #include "LoomTimeInterval.h"
 #include "LoomMAC.h"
 
@@ -41,7 +40,7 @@ public:
 	void app_send(const uint16_t dst_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length);
 	LoomNetworkFragment app_recv();
 
-	Error get_last_error() const { return m_last_error }
+	Error get_last_error() const { return m_last_error; }
 private:
 	void m_halt_error(Error error) {
 		m_last_error = error;

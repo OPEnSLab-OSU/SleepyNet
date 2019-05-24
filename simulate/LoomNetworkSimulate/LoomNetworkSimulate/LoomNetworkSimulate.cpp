@@ -60,6 +60,19 @@ int main()
 
 		for (auto const& i : buffer.crange()) std::cout << i.m_i << ", ";
 		std::cout << std::endl;
+
+		auto iter = buffer.crange().begin();
+		++iter;
+		++iter;
+		++iter;
+
+		buffer.remove(iter);
+
+		for (auto const& i : buffer.crange()) std::cout << i.m_i << ", ";
+		std::cout << std::endl;
+
+		for (auto iter = buffer.crange().begin(); iter != buffer.crange().end(); ++iter)  std::cout << (*iter).m_i << ", ";
+		std::cout << std::endl;
 	}
 }
 

@@ -28,11 +28,12 @@ void LoomNetwork<send_buffer, recv_buffer>::net_sleep_wake_ack()
 				// send the first packet corresponding to the address indicated by the MAC layer
 				uint16_t addr = m_mac.get_cur_send_address();
 				auto iter = m_buffer_send.crange().begin();
-				for (; iter != m_buffer_send.crange().end(); iter++) {
+				auto end = m_buffer_send.crange().end();
+				for (; iter != end; ++iter) {
 					if (iter->get_next_hop() == addr) break;
 				}
 				// if there isn't any, send none and move on
-				if (iter == m_bufer_send.crange().end()) m_mac.send_pass();
+				if (iter == end) m_mac.send_pass();
 				else {
 					// send, and if it succeded, destroy the item
 					if (m_mac.send_fragment(*iter)) {
@@ -55,16 +56,18 @@ void LoomNetwork<send_buffer, recv_buffer>::net_sleep_wake_ack()
 			const LoomNetworkFragment& recv_frag = m_mac.recv_fragment();
 			// if we have a fragment that is addressed to us, add it to the recv buffer
 			if (recv_frag.get_dst() == m_addr) {
-				if (!m_buffer_recv.emplace_back(recv_frag)) return m_halt_error(Error::RECV_BUF_FULL);
+				if (!m_buffer_recv.emplace_back(recv_frag)) 
+					return m_halt_error(Error::RECV_BUF_FULL);
 				// flip the recv ready bit
 				m_status |= Status::NET_RECV_RDY;
 			}
 			// else the packet needs to be routed
 			else {
 				uint16_t nexthop = m_next_hop(recv_frag.get_dst());
-				if (nexthop == LoomNetworkFragment::ADDR_NONE) return m_halt_error(Error::ROUTE_FAIL);
+				if (nexthop == LoomNetworkFragment::ADDR_NONE) 
+					return m_halt_error(Error::ROUTE_FAIL);
 				// push the packet to the send buffer, tagging it with the next hop address
-				if (!m_buffer_send.emplace_back(recv_frag, m_next_hop(recv_frag.get_dst())) 
+				if (!m_buffer_send.emplace_back(recv_frag, m_next_hop(recv_frag.get_dst())))
 					return m_halt_error(Error::SEND_BUF_FULL);
 			}
 		}
@@ -110,9 +113,9 @@ template<size_t send_buffer, size_t recv_buffer>
 void LoomNetwork<send_buffer, recv_buffer>::app_send(const uint16_t dst_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length)
 {
 	// push the send fragment into the buffer
-	m_buffer_send.emplace_back{
-		std::forward(dst_addr), m_addr, std::forward(seq), std::forward(raw_payload), std::forward(length), m_next_hop(dst_addr)
-	};
+	m_buffer_send.emplace_back({ 
+		std::forward(dst_addr), m_addr, std::forward(seq), std::forward(raw_payload), std::forward(length), m_next_hop(dst_addr) 
+		});
 	// if the send buffer is full, disallow further sending
 	if (m_buffer_send.full()) m_status &= ~Status::NET_SEND_RDY;
 }

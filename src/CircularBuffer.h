@@ -141,6 +141,8 @@ public:
 		T& operator*() { return *reinterpret_cast<T*>(&m_data[m_position]); }
 		Iterator& operator++() { m_position++; if (m_position >= max_size) m_position = 0; m_index++; return *this; }
 		bool operator!=(const Iterator& it) const { return m_index != it.m_index; }
+
+		friend class CircularBuffer<T, max_size>;
 	};
 	
 	class ConstIterator {
@@ -156,15 +158,41 @@ public:
 		const T& operator*() const { return *reinterpret_cast<const T*>(&m_data[m_position]); }
 		ConstIterator& operator++() { m_position++; if (m_position >= max_size) m_position = 0; m_index++; return *this; }
 		bool operator!=(const ConstIterator& it) const { return m_index != it.m_index; }
+
+		friend class CircularBuffer<T, max_size>;
 	};
 
 	Iterator begin() { return { m_array, m_start, 0 }; }
-	Iterator end() { return { m_array, m_get_true_index(m_length, m_start), m_length }; }
+	Iterator end() { return { m_array, m_start == 0 ? m_length : m_get_true_index(m_length, m_start), m_length }; }
 
 	ConstIterator begin() const { return { m_array, m_start, 0 }; }
 	ConstIterator end() const { return { m_array, m_start == 0 ? m_length : m_get_true_index(m_length, m_start), m_length }; }
 
 	const CircularBuffer<T, max_size>& crange() const noexcept { return *this; }
+
+	/** destroy at index */
+	void remove(const CircularBuffer<T, max_size>::ConstIterator& iter) {
+		// destroy the element
+		(*iter).~T();
+		// copy the memory over from the back or the front, whichever is closest
+		if (iter.m_index >= (m_length >> 1)) {
+			// copy from the back
+			for (auto i = iter.m_index; i < m_length - 1; i++) {
+				m_array[m_get_true_index(i, m_start)] = m_array[m_get_true_index(i + 1, m_start)];
+			}
+		}
+		else {
+			// copy from the front
+			for (auto i = iter.m_index; i > 0; i--) {
+				m_array[m_get_true_index(i, m_start)] = m_array[m_get_true_index(i - 1, m_start)];
+			}
+			// inc start
+			if (m_start == max_size - 1) m_start = 0;
+			else m_start++;
+		}
+		// dec length
+		m_length--;
+	}
 
 private:
 	

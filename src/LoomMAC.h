@@ -39,14 +39,8 @@ public:
 	bool check_for_refresh();
 
 private:
-	enum class InternalState {
-		SLEEP_FOR_REFRESH,
-		SLEEP_FOR_DATA,
-	};
-
 	LoomNetworkFragment m_recv;
 	State m_state;
-	InternalState m_state;
 	Error m_last_error;
 
 };

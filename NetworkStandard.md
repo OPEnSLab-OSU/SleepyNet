@@ -48,7 +48,35 @@ These devices may be interconnected, forming a path. A valid topology of paths i
 * An endpoint device may not create a path to another endpoint device.
 * A router must have at least one path to either another router or the coordinator, and at least one path to an endpoint device.
 * The number of routers between an endpoint device and a coordinator shall not exceed 2.
-  
+
+Based on the above topology, the network layer shall assign addresses to each device based on an address spaces algorithm, specified below:
+* The Coordinator is granted the address of `0xF000`, and the address `0x0000` shall be reserved.
+* An address shall be split into three components:
+```
++--------------+---------------+---------+
+| First Router | Second Router | Node    |
+| 4 Bits       | 4 Bits        | 8 Bits  | 
++--------------+---------------+---------+
+```
+* Where:
+  * First router: The address of the router closest to the coordinator on the path from the node to the Coordinator, starting from 1 and not including 16. If there is no router in between the end device and Coordinator, this value is zero.
+  * Second router: The address of the router farthest from coordinator on the path from the node to the Coordinator, starting from 1. If there is less than two routers between the end device and coordinator, this value is zero.
+  * Node: The address of the end device itself, starting from 1. If this value is zero, the address is referring to the router with the last non-zero address.
+* Routers with paths to the Coordinator shall be assigned only the First Router component with the rest zero, and Routers one hop from the Coordinator shall be assigned the First Router from their parent and the Second Router as themselves with Node set to zero. Finally, each End Device is assigned a address in the Node field, inheriting First Router and Second Router from it's parents. Each time a field is assigned, it does so sequentially starting from 1 in order of appearance in the configuration. 
+
+The above address scheme limits Routers per device to 14, and nodes per router to 254.
+
+* Each device with a direct path to the Coordinator is evaluated for how many devices are routed through it, including itself. Devices with direct paths to the Coordinator are then assigned an address space in `0x0002`-`0xFFFF` exactly large enough to contain every device counted in the previous operation, in order of first presented in configuration. The device is then assigned the first address in this space.
+  * For example, these devices have a direct path the the Coordinator, and are presented in this order in configuration:
+    * Router 1 with 12 children devices.
+    * Router 2 with 4 children devices.
+    * End device 1 with 1 children device (itself).
+  These devices would receive the following address spaces:
+    * Router 1: `0x0002` - `0x000E` (`0x0002` Self)
+    * Router 2: `0x000F` - `0x0013` (`0x000F` Self)
+    * End device: `0x0014` Self
+* This operation is then repeated for each Router with a direct path to the Coordinator, in order of lowest address, and restricted to the address space granted by the Coordinator. Repeat until the entire tree is traversed.
+
 The network layer shall automatically handle packet passing if the device is not the destination, determining the next destination using the internal routing configuration.
 
 ### Retransmission
@@ -168,10 +196,10 @@ Where:
 
 ### Data Transaction
 
-Each device shall determine it's own time slot using network topology configuration, using a depth first search. The algorithm shall treat the network topology as a tree with the Coordinator on top, and shall operate as follows:
+Each device shall determine it's own time slot using network topology configuration, using a reverse breadth-first search. The algorithm shall treat the network topology as a tree with the Coordinator on top, and shall operate as follows:
 * The tree is divided into layers, where each layer is defined by the number of devices in-between the device and the coordinator.
-* The end device on the greatest layer (with greatest number of routers on it's path from bottom to top) is chosen as the first node to transmit. 
-* For every layer, nodes are ordered first by router, and then by address.
+* The end device on the greatest layer (with greatest number of routers on it's path from bottom to top) is chosen as the first node to transmit. If there are more than one node on the greatest layer, the one with the lowest address is chosen.
+* For every layer starting from the greatest layer, nodes are sub-ordered first by router, and then by address lowest-first.
   * Routers on the layer above are ordered by lowest address first, and then the end-devices are sub-ordered by lowest address.
 * A fixed window time slot is assigned based on capability and child devices. Time slots for a given device are always consecutive.
   * A single time slot is granted for sensing capabilities.

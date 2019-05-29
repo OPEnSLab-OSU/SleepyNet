@@ -3,6 +3,8 @@
 
 #include "../../../src/LoomNetwork.h"
 #include "../../../src/CircularBuffer.h"
+#include "../../../src/LoomRouter.h"
+#include "../../../src/LoomNetworkConfig.h"
 #include <iostream>
 #include <vector>
 
@@ -13,6 +15,9 @@ public:
 
 	int m_i;
 };
+
+const char JSONStr[] = "{\"root\":{\"name\":\"BillyTheCoord\",\"sensor\":false,\"children\":[{\"name\":\"End Device 1\",\"type\":0},{\"name\":\"Router 1\",\"sensor\":false,\"type\":1,\"children\":[{\"name\":\"Router 1 End Device 1\",\"type\":0},{\"name\":\"Router 1 End Device 2\",\"type\":0},{\"name\":\"Router 1 Router 1\",\"sensor\":false,\"type\":1,\"children\":[{\"name\":\"Router 1 Router 1 End Device 1\",\"type\":0}]},{\"name\":\"Router 1 Router 2\",\"sensor\":true,\"type\":1,\"children\":[{\"name\":\"Router 1 Router 2 End Device 1\",\"type\":0}]},{\"name\":\"Router 1 End Device 3\",\"type\":0}]},{\"name\":\"Router 2\",\"sensor\":true,\"type\":1,\"children\":[{\"name\":\"Router 2 End Device 1\",\"type\":0}]}]}}";
+constexpr auto size = 2048;
 
 int main()
 {
@@ -73,6 +78,16 @@ int main()
 
 		for (auto iter = buffer.crange().begin(); iter != buffer.crange().end(); ++iter)  std::cout << (*iter).m_i << ", ";
 		std::cout << std::endl;
+	}
+
+	std::cout << "end testing circular buffer" << std::endl;
+	std::cout << "begin testing JSON network parsing" << std::endl;
+
+	{
+		StaticJsonDocument<size> json;
+		deserializeJson(json, JSONStr);
+
+		LoomNet::Router addr = LoomNet::read_network_topology(json.as<JsonObjectConst>(), "Router 2 End Device 1");
 	}
 }
 

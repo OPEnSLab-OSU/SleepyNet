@@ -160,8 +160,10 @@
     <ClInclude Include="..\..\..\src\HashMap.h" />
     <ClInclude Include="..\..\..\src\LoomMAC.h" />
     <ClInclude Include="..\..\..\src\LoomNetwork.h" />
+    <ClInclude Include="..\..\..\src\LoomNetworkConfig.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkFragment.h" />
-    <ClInclude Include="..\..\..\src\LoomTimeInterval.h" />
+    <ClInclude Include="..\..\..\src\LoomRouter.h" />
+    <ClInclude Include="..\..\..\src\LoomNetworkUtility.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

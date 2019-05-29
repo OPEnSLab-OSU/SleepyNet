@@ -38,7 +38,13 @@
     <ClInclude Include="..\..\..\src\HashMap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\LoomTimeInterval.h">
+    <ClInclude Include="..\..\..\src\LoomRouter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\LoomNetworkConfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\LoomNetworkUtility.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

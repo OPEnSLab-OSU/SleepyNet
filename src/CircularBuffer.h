@@ -21,8 +21,10 @@ public:
 		, m_length(0)
 		, m_start(0) {}
 
+	void reset() { for (auto& item : *this) item.~T(); m_length = 0; m_start = 0; }
+
 	~CircularBuffer<T, max_size>() {
-		for (auto& item : *this) item.~T();
+		reset();
 	}
 
 	CircularBuffer(CircularBuffer& c) = delete;

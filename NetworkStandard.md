@@ -66,17 +66,6 @@ Based on the above topology, the network layer shall assign addresses to each de
 
 The above address scheme limits Routers per device to 14, and nodes per router to 254.
 
-* Each device with a direct path to the Coordinator is evaluated for how many devices are routed through it, including itself. Devices with direct paths to the Coordinator are then assigned an address space in `0x0002`-`0xFFFF` exactly large enough to contain every device counted in the previous operation, in order of first presented in configuration. The device is then assigned the first address in this space.
-  * For example, these devices have a direct path the the Coordinator, and are presented in this order in configuration:
-    * Router 1 with 12 children devices.
-    * Router 2 with 4 children devices.
-    * End device 1 with 1 children device (itself).
-  These devices would receive the following address spaces:
-    * Router 1: `0x0002` - `0x000E` (`0x0002` Self)
-    * Router 2: `0x000F` - `0x0013` (`0x000F` Self)
-    * End device: `0x0014` Self
-* This operation is then repeated for each Router with a direct path to the Coordinator, in order of lowest address, and restricted to the address space granted by the Coordinator. Repeat until the entire tree is traversed.
-
 The network layer shall automatically handle packet passing if the device is not the destination, determining the next destination using the internal routing configuration.
 
 ### Retransmission
@@ -268,4 +257,70 @@ Additionally, a radio shall have an implementation of a method to create unique 
 
 ## Configuration
 
+```JSON
+{
+       "root" : {
+              "name": "BillyTheCoord",
+              "sensor": false,
+              "children": [
+                     {
+                            "name": "End Device 1",
+                            "type": 0
+                     },
+                     {
+                            "name": "Router 1",
+                            "sensor": false,
+                            "type": 1,
+                            "children": [
+                                   {
+                                          "name": "Router 1 End Device 1",
+                                          "type": 0
+                                   },
+                                   {
+                                          "name": "Router 1 End Device 2",
+                                          "type": 0
+                                   },
+                                   {
+                                          "name": "Router 1 Router 1",
+                                          "sensor": false,
+                                          "type": 1,
+                                          "children": [
+                                                 {
+                                                        "name": "Router 1 Router 1 End Device 1",
+                                                        "type": 0
+                                                 }
+                                          ]
+                                   },
+                                   {
+                                          "name": "Router 1 Router 2",
+                                          "sensor": true,
+                                          "type": 1,
+                                          "children": [
+                                                 {
+                                                        "name": "Router 1 Router 2 End Device 1",
+                                                        "type": 0
+                                                 }
+                                          ]
+                                   },
+                                   {
+                                          "name": "Router 1 End Device 3",
+                                          "type": 0
+                                   }
+                            ]
 
+                     },
+                     {
+                            "name": "Router 2",
+                            "sensor": true,
+                            "type": 1,
+                            "children": [
+                                   {
+                                          "name": "Router 2 End Device 1",
+                                          "type": 0
+                                   }
+                            ]
+                     }
+              ]
+       }
+}
+```

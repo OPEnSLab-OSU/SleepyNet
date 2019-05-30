@@ -67,7 +67,7 @@ void Network<send_buffer, recv_buffer>::net_sleep_wake_ack()
 			// else the packet needs to be routed
 			else {
 				uint16_t nexthop = m_router.route(recv_frag.get_dst());
-				if (nexthop == Fragment::ADDR_NONE) 
+				if (nexthop == ADDR_ERROR || nexthop == ADDR_NONE) 
 					return m_halt_error(Error::ROUTE_FAIL);
 				// push the packet to the send buffer, tagging it with the next hop address
 				if (!m_buffer_send.emplace_back(recv_frag, nexthop))

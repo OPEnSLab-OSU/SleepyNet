@@ -7,10 +7,10 @@
  */
 
 namespace LoomNet {
-	const uint16_t ADDR_NONE = 0;
-	const uint16_t ADDR_COORD = 0xF000;
-	const uint16_t ADDR_ERROR = 0xFFFF;
-	const auto STRING_MAX = 32;
+	constexpr uint16_t ADDR_NONE = 0;
+	constexpr uint16_t ADDR_COORD = 0xF000;
+	constexpr uint16_t ADDR_ERROR = 0xFFFF;
+	constexpr auto STRING_MAX = 32;
 
 	enum class DeviceType {
 		COORDINATOR,

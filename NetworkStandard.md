@@ -299,6 +299,10 @@ Additionally, a radio shall have an implementation of a method to create unique 
                                                  {
                                                         "name": "Router 1 Router 2 End Device 1",
                                                         "type": 0
+                                                 },
+                                                 {
+                                                        "name": "Router 1 Router 2 End Device 2",
+                                                        "type": 0
                                                  }
                                           ]
                                    },

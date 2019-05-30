@@ -10,15 +10,15 @@
  * For now this will only populate LoomRouter with information, as LoomMAC has not been written.
  */
 
-static uint16_t m_recurse_traverse(const JsonArrayConst& children, const char* self_name, const uint8_t router_count = 0, const uint8_t depth = 0) {
-	uint8_t node_count = 1;
-	uint8_t cur_router_count = 1;
+static uint16_t m_recurse_traverse(const JsonArrayConst& children, const char* self_name, const uint16_t router_count = 0, const uint8_t depth = 0) {
+	uint16_t node_count = 1;
+	uint16_t cur_router_count = 1;
 
-	for (JsonVariant device : children) {
-		if (device == NULL || !device.is<JsonObject>()) return std::numeric_limits<uint16_t>::max();
+	for (JsonObjectConst device : children) {
+		if (device.isNull()) return LoomNet::ADDR_ERROR;
 		// get the device type
-		const uint8_t type = device["type"].as<uint8_t>() | 255;
-		if (type == 255) return std::numeric_limits<uint16_t>::max();
+		const uint8_t type = device["type"] | static_cast<uint8_t>(255);
+		if (type == 255) return LoomNet::ADDR_ERROR;
 
 		uint16_t node_address_part = 0;
 		bool found = false;
@@ -30,8 +30,8 @@ static uint16_t m_recurse_traverse(const JsonArrayConst& children, const char* s
 			if (type == 0) node_address_part = node_count;
 			// else if it's a router, return the router count
 			else if (type == 1)
-				node_address_part = (depth == 0) ? (static_cast<uint16_t>(cur_router_count) << 8)
-				: (static_cast<uint16_t>(cur_router_count) << 12);
+				node_address_part = (depth == 0) ? (cur_router_count << 12)
+				: (cur_router_count << 8);
 			// else leave it at zero, and add the routers
 			found = true;
 		}
@@ -50,55 +50,113 @@ static uint16_t m_recurse_traverse(const JsonArrayConst& children, const char* s
 
 		if (found) {
 			// recursed twice, add the second router count
-			if (depth == 2) return node_address_part | (static_cast<uint16_t>(router_count) << 8);
+			if (depth == 2) return node_address_part | (router_count << 8);
 			// else recursed once, add the first router count
-			if (depth == 1) return node_address_part | (static_cast<uint16_t>(router_count) << 12);
+			if (depth == 1) return node_address_part | (router_count << 12);
 			// else we're good to go
 			return node_address_part;
 		}
 	}
 	// guess we didn't find anything
-	return 0;
+	return LoomNet::ADDR_NONE;
+}
+
+static JsonObjectConst m_find_router(const JsonArrayConst& my_array, const uint16_t router_index) {
+	uint16_t cur_router_index = 0;
+	// iterate through the children array, looking for our router
+	for (JsonObjectConst obj : my_array) {
+		// error checks
+		if (obj.isNull()) return JsonObjectConst();
+		// get the device type
+		const uint8_t type = obj["type"] | static_cast<uint8_t>(255);
+		if (type == 255) return JsonObjectConst();
+		// if it's a router, check if it's our router
+		if (type == 1) {
+			if (cur_router_index == router_index) return obj;
+			// else increment the router count and keep looking
+			else cur_router_index++;
+		}
+	}
+	return JsonObjectConst();
 }
 
 namespace LoomNet {
 	Router read_network_topology(const JsonObjectConst& topology, const char* self_name) {
+		// device type
+		DeviceType type = DeviceType::ERROR;
+		// address
+		uint16_t address = ADDR_ERROR;
+		// parent
+		uint16_t parent = ADDR_ERROR;
+		// root array of node children
+		const JsonArrayConst root_array = topology["root"]["children"].as<JsonArrayConst>();
 		// coordinator special case
 		const char* name = topology["root"]["name"].as<const char*>();
 		if (name != NULL && !strncmp(name, self_name, STRING_MAX)) {
-			return {
-				DeviceType::COORDINATOR,
-				ADDR_COORD,
-				ADDR_NONE,
-			};
+			type = DeviceType::COORDINATOR;
+			address = ADDR_COORD;
+			parent = ADDR_NONE;
 		}
-		const auto thing = topology["root"]["children"].as<JsonArrayConst>();
-		// search the tree for our device name, keeping track of how many routers we've traversed
-		const uint16_t address = m_recurse_traverse(topology["root"]["children"].as<JsonArrayConst>(), self_name);
-		// figure out device type and parent address from there
-		// device type
-		DeviceType type;
-		// if theres any node address, it's an end device
-		if (address & 0x00FF) type = DeviceType::END_DEVICE;
-		// else it's a router
+		// else its a router or end device!
 		else {
-			// if theres a first router in the address, check if there's a second
-			if (address & 0x0F00) type = DeviceType::SECOND_ROUTER;
-			else type = DeviceType::FIRST_ROUTER;
+			// search the tree for our device name, keeping track of how many routers we've traversed
+			address = m_recurse_traverse(root_array, self_name);
+			// error if not found
+			if (address == ADDR_NONE || address == ADDR_ERROR) return ROUTER_ERROR;
+			// figure out device type and parent address from there
+
+			// if theres any node address, it's an end device
+			if (address & 0x00FF) type = DeviceType::END_DEVICE;
+			// else it's a router
+			else {
+				// if theres a first router in the address, check if there's a second
+				if (address & 0x0F00) type = DeviceType::SECOND_ROUTER;
+				else type = DeviceType::FIRST_ROUTER;
+			}
+			// remove node address from end device
+			if (type == DeviceType::END_DEVICE) parent = address & 0xFF00;
+			// remove second router address from secound router
+			else if (type == DeviceType::SECOND_ROUTER) parent = address & 0xF000;
+			// parent of first router is always coordinator
+			if (type == DeviceType::FIRST_ROUTER || !parent) parent = ADDR_COORD;
 		}
-		// address parent
-		uint16_t parent;
-		// remove node address from end device
-		if (type == DeviceType::END_DEVICE) parent = address & 0xFF00;
-		// remove second router address from secound router
-		else if (type == DeviceType::SECOND_ROUTER) parent = address & 0xF000;
-		// parent of first router is always coordinator
-		else parent = ADDR_COORD;
+		// next, we need to find our devices children in the JSON
+		// find the array of children we would like to search
+		JsonArrayConst ray = JsonArrayConst();
+		if (type == DeviceType::COORDINATOR) ray = root_array;
+		else if (type == DeviceType::FIRST_ROUTER || type == DeviceType::SECOND_ROUTER) {
+			// first level search
+			JsonObjectConst obj = m_find_router(root_array, (address >> 12) - 1);
+			if (type == DeviceType::SECOND_ROUTER) {
+				// we need to search another layer for the second router, so do that
+				obj = m_find_router(obj["children"], ((address & 0x0F00) >> 8) - 1);
+			}
+			if (obj.isNull() || obj["children"].isNull()) return ROUTER_ERROR;
+			// we found it! neat.
+			ray = obj["children"];
+		}
+		// next, measure how many end devices and routers are children are underneath our device
+		uint8_t router_count = 0;
+		uint8_t node_count = 0;
+		// iterate through the children array, counting nodes and routers
+		for (JsonObjectConst obj : ray) {
+			if (obj.isNull()) return ROUTER_ERROR;
+			// get the device type
+			const uint8_t type = obj["type"] | static_cast<uint8_t>(255);
+			// if it's a router, increment routers
+			if (type == 1) router_count++;
+			// else if it's a node, incremement nodes
+			else if (type == 0) node_count++;
+			// else uh oh
+			else return ROUTER_ERROR;
+		}
 		// return these things!
 		return {
 			type,
 			address,
 			parent,
+			router_count,
+			node_count,
 		};
 	}
 }

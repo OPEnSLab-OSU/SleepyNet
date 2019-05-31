@@ -33,7 +33,7 @@ namespace LoomNet {
 			ROUTE_FAIL,
 		};
 
-		Network(const Router& route_info);
+		Network(const Router& route_info, std::map<uint16_t, std::array<uint8_t, 255>> & network_sim);
 
 		TimeInverval net_sleep_next_wake_time() const { return m_mac.sleep_next_wake_time(); }
 		void net_sleep_wake_ack();

@@ -1,0 +1,71 @@
+{
+  "config": {
+    "cycles_per_refresh":  20
+  },
+  "root": {
+    "name": "BillyTheCoord",
+    "sensor": false,
+    "children": [
+      {
+        "name": "End Device 1",
+        "type": 0
+      },
+      {
+        "name": "Router 1",
+        "sensor": false,
+        "type": 1,
+        "children": [
+          {
+            "name": "Router 1 End Device 1",
+            "type": 0
+          },
+          {
+            "name": "Router 1 End Device 2",
+            "type": 0
+          },
+          {
+            "name": "Router 1 Router 1",
+            "sensor": false,
+            "type": 1,
+            "children": [
+              {
+                "name": "Router 1 Router 1 End Device 1",
+                "type": 0
+              }
+            ]
+          },
+          {
+            "name": "Router 1 Router 2",
+            "sensor": true,
+            "type": 1,
+            "children": [
+              {
+                "name": "Router 1 Router 2 End Device 1",
+                "type": 0
+              },
+              {
+                "name": "Router 1 Router 2 End Device 2",
+                "type": 0
+              }
+            ]
+          },
+          {
+            "name": "Router 1 End Device 3",
+            "type": 0
+          }
+        ]
+      },
+      {
+        "name": "Router 2",
+        "sensor": true,
+        "type": 1,
+        "children": [
+          {
+            "name": "Router 2 End Device 1",
+            "type": 0
+          }
+        ]
+      }
+    ]
+  }
+}

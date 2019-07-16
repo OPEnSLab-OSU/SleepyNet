@@ -91,14 +91,14 @@ int main()
 	std::cout << "end testing circular buffer" << std::endl;
 	std::cout << "begin testing JSON network parsing" << std::endl;
 
-	{
-		constexpr char JSONStr[] = "{\"root\":{\"name\":\"BillyTheCoord\",\"sensor\":false,\"children\":[{\"name\":\"End Device 1\",\"type\":0},{\"name\":\"Router 1\",\"sensor\":false,\"type\":1,\"children\":[{\"name\":\"Router 1 End Device 1\",\"type\":0},{\"name\":\"Router 1 End Device 2\",\"type\":0},{\"name\":\"Router 1 Router 1\",\"sensor\":false,\"type\":1,\"children\":[{\"name\":\"Router 1 Router 1 End Device 1\",\"type\":0}]},{\"name\":\"Router 1 Router 2\",\"sensor\":true,\"type\":1,\"children\":[{\"name\":\"Router 1 Router 2 End Device 1\",\"type\":0},{\"name\":\"Router 1 Router 2 End Device 2\",\"type\":0}]},{\"name\":\"Router 1 End Device 3\",\"type\":0}]},{\"name\":\"Router 2\",\"sensor\":true,\"type\":1,\"children\":[{\"name\":\"Router 2 End Device 1\",\"type\":0}]}]}}";
-		constexpr auto size = 2048;
-		
-		StaticJsonDocument<size> json;
-		deserializeJson(json, JSONStr);
-		const auto obj = json.as<JsonObjectConst>();
+	constexpr char JSONStr[] = "{\"root\":{\"name\":\"BillyTheCoord\",\"sensor\":false,\"children\":[{\"name\":\"End Device 1\",\"type\":0},{\"name\":\"Router 1\",\"sensor\":false,\"type\":1,\"children\":[{\"name\":\"Router 1 End Device 1\",\"type\":0},{\"name\":\"Router 1 End Device 2\",\"type\":0},{\"name\":\"Router 1 Router 1\",\"sensor\":false,\"type\":1,\"children\":[{\"name\":\"Router 1 Router 1 End Device 1\",\"type\":0}]},{\"name\":\"Router 1 Router 2\",\"sensor\":true,\"type\":1,\"children\":[{\"name\":\"Router 1 Router 2 End Device 1\",\"type\":0},{\"name\":\"Router 1 Router 2 End Device 2\",\"type\":0}]},{\"name\":\"Router 1 End Device 3\",\"type\":0}]},{\"name\":\"Router 2\",\"sensor\":true,\"type\":1,\"children\":[{\"name\":\"Router 2 End Device 1\",\"type\":0}]}]}}";
+	constexpr auto size = 2048;
 
+	StaticJsonDocument<size> json;
+	deserializeJson(json, JSONStr);
+	const auto obj = json.as<JsonObjectConst>();
+
+	{
 		using namespace LoomNet;
 		test_address(read_network_topology(obj, "Router 2 End Device 1"), Router(DeviceType::END_DEVICE, 0x2001, 0x2000, 0, 0), "Router 2 End Device 1");
 		test_address(read_network_topology(obj, "Router 2"), Router(DeviceType::FIRST_ROUTER, 0x2000, ADDR_COORD, 0, 1), "Router 2");
@@ -135,6 +135,33 @@ int main()
 	}
 
 	std::cout << "end testing JSON network parsing" << std::endl;
+
+	std::cout << "begin testing Loom Network operation" << std::endl;
+
+	{
+		using namespace LoomNet;
+		// intitialize a bunch of network objects and a map to simulate network packets
+		std::map<uint16_t, std::array<uint8_t, 255>> sim_net;
+		std::array<Network<16U, 16U>, 13> devices{{
+			{ read_network_topology(obj, "Router 2 End Device 1"), sim_net },
+			{ read_network_topology(obj, "Router 2"), sim_net },
+			{ read_network_topology(obj, "Router 1 End Device 3"), sim_net },
+			{ read_network_topology(obj, "Router 1 Router 2"), sim_net },
+			{ read_network_topology(obj, "Router 1 Router 2 End Device 1"), sim_net },
+			{ read_network_topology(obj, "Router 1 Router 2 End Device 2"), sim_net },
+			{ read_network_topology(obj, "Router 1 Router 1"), sim_net },
+			{ read_network_topology(obj, "Router 1 Router 1 End Device 1"), sim_net },
+			{ read_network_topology(obj, "Router 1 End Device 2"), sim_net },
+			{ read_network_topology(obj, "Router 1 End Device 1"), sim_net },
+			{ read_network_topology(obj, "Router 1"), sim_net },
+			{ read_network_topology(obj, "End Device 1"), sim_net },
+			{ read_network_topology(obj, "BillyTheCoord"), sim_net }
+		}};
+		// prep them all by simulating a refresh
+
+	}
+
+	std::cout << "end testing Loom Network operation" << std::endl;
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu

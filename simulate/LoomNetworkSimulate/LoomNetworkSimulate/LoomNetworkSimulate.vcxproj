@@ -164,6 +164,10 @@
     <ClInclude Include="..\..\..\src\LoomNetworkFragment.h" />
     <ClInclude Include="..\..\..\src\LoomRouter.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkUtility.h" />
+    <ClInclude Include="..\..\..\src\LoomSlotter.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Topology.json" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

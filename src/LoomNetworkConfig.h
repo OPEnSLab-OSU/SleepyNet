@@ -1,5 +1,6 @@
 #pragma once
 #include "LoomRouter.h"
+#include "LoomSlotter.h"
 #include "LoomNetworkUtility.h"
 #include <ArduinoJson.h>
 #include <cstdint>
@@ -10,7 +11,7 @@
  * For now this will only populate LoomRouter with information, as LoomMAC has not been written.
  */
 
-static uint16_t m_recurse_traverse(const JsonArrayConst& children, const char* self_name, const uint16_t router_count = 0, const uint8_t depth = 0) {
+static uint16_t m_recurse_traverse(const JsonArrayConst& children, const char* self_name, JsonObjectConst& self_obj, const uint16_t router_count = 0, const uint8_t depth = 0) {
 	uint16_t node_count = 1;
 	uint16_t cur_router_count = 1;
 
@@ -26,6 +27,7 @@ static uint16_t m_recurse_traverse(const JsonArrayConst& children, const char* s
 		const char* name = device["name"].as<const char*>();
 		if (!strncmp(name, self_name, LoomNet::STRING_MAX)) {
 			// we found it!
+			self_obj = device;
 			// if it's a node, return the node count for processing later
 			if (type == 0) node_address_part = node_count;
 			// else if it's a router, return the router count
@@ -41,7 +43,7 @@ static uint16_t m_recurse_traverse(const JsonArrayConst& children, const char* s
 			// else recurse through the router children array
 			else {
 				// check all the children for our name
-				node_address_part = m_recurse_traverse(device["children"].as<JsonArrayConst>(), self_name, cur_router_count, depth + 1);
+				node_address_part = m_recurse_traverse(device["children"].as<JsonArrayConst>(), self_name, self_obj, cur_router_count, depth + 1);
 				// increment the router counter
 				if (!node_address_part) cur_router_count++;
 				else found = true;
@@ -61,23 +63,25 @@ static uint16_t m_recurse_traverse(const JsonArrayConst& children, const char* s
 	return LoomNet::ADDR_NONE;
 }
 
-static JsonObjectConst m_find_router(const JsonArrayConst& my_array, const uint16_t router_index) {
-	uint16_t cur_router_index = 0;
-	// iterate through the children array, looking for our router
-	for (JsonObjectConst obj : my_array) {
-		// error checks
-		if (obj.isNull()) return JsonObjectConst();
-		// get the device type
-		const uint8_t type = obj["type"] | static_cast<uint8_t>(255);
-		if (type == 255) return JsonObjectConst();
-		// if it's a router, check if it's our router
-		if (type == 1) {
-			if (cur_router_index == router_index) return obj;
-			// else increment the router count and keep looking
-			else cur_router_index++;
+static uint8_t m_count_slots(const JsonArrayConst& children) {
+	if (children.isNull()) return 0;
+	// traverse the tree, adding up slots in a depth-first manner
+	uint8_t total = 0;
+	for (JsonObjectConst device : children) {
+		// get device type
+		const LoomNet::DeviceType type = static_cast<LoomNet::DeviceType>(device["type"] | LoomNet::DeviceType::ERROR);
+		// if the device is an end device, add a slot
+		if (type == LoomNet::DeviceType::ERROR) return 0;
+		else if (type == LoomNet::DeviceType::END_DEVICE) total++;
+		// if the device is a first or second router, search the children recursivley
+		else if (type == LoomNet::DeviceType::FIRST_ROUTER || type == LoomNet::DeviceType::SECOND_ROUTER) {
+			// add a slot for sensing capabilities
+			if (!(device["sensor"].as<bool>() | true)) total++;
+			// search children
+			total += m_count_slots(device["children"]);
 		}
 	}
-	return JsonObjectConst();
+	return total;
 }
 
 namespace LoomNet {
@@ -90,6 +94,8 @@ namespace LoomNet {
 		uint16_t parent = ADDR_ERROR;
 		// root array of node children
 		const JsonArrayConst root_array = topology["root"]["children"].as<JsonArrayConst>();
+		// track a object with a json refrence to our object
+		JsonObjectConst self_obj = JsonObjectConst();
 		// coordinator special case
 		const char* name = topology["root"]["name"].as<const char*>();
 		if (name != NULL && !strncmp(name, self_name, STRING_MAX)) {
@@ -100,11 +106,10 @@ namespace LoomNet {
 		// else its a router or end device!
 		else {
 			// search the tree for our device name, keeping track of how many routers we've traversed
-			address = m_recurse_traverse(root_array, self_name);
+			address = m_recurse_traverse(root_array, self_name, self_obj);
 			// error if not found
 			if (address == ADDR_NONE || address == ADDR_ERROR) return ROUTER_ERROR;
 			// figure out device type and parent address from there
-
 			// if theres any node address, it's an end device
 			if (address & 0x00FF) type = DeviceType::END_DEVICE;
 			// else it's a router
@@ -122,19 +127,8 @@ namespace LoomNet {
 		}
 		// next, we need to find our devices children in the JSON
 		// find the array of children we would like to search
-		JsonArrayConst ray = JsonArrayConst();
+		JsonArrayConst ray = self_obj["children"];
 		if (type == DeviceType::COORDINATOR) ray = root_array;
-		else if (type == DeviceType::FIRST_ROUTER || type == DeviceType::SECOND_ROUTER) {
-			// first level search
-			JsonObjectConst obj = m_find_router(root_array, (address >> 12) - 1);
-			if (type == DeviceType::SECOND_ROUTER) {
-				// we need to search another layer for the second router, so do that
-				obj = m_find_router(obj["children"], ((address & 0x0F00) >> 8) - 1);
-			}
-			if (obj.isNull() || obj["children"].isNull()) return ROUTER_ERROR;
-			// we found it! neat.
-			ray = obj["children"];
-		}
 		// next, measure how many end devices and routers are children are underneath our device
 		uint8_t router_count = 0;
 		uint8_t node_count = 0;
@@ -158,5 +152,9 @@ namespace LoomNet {
 			router_count,
 			node_count,
 		};
+	}
+
+	Slotter read_network_slots(const JsonObjectConst& topology) {
+
 	}
 }

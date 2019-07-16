@@ -8,69 +8,106 @@
 namespace LoomNet {
 	class Fragment {
 	public:
-		explicit Fragment(const uint16_t dst_addr, const uint16_t src_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length, const uint16_t next_addr)
-			: m_dst_addr(dst_addr)
-			, m_src_addr(src_addr)
-			, m_seq(seq)
-			, m_payload{}
-			, m_payload_len(length)
+		explicit Fragment(const PacketCtrl control)
+			: m_payload{} {
+			// set the control
+			m_payload[0] = control;
+		}
+
+		explicit Fragment(const uint8_t* raw_packet, const uint8_t max_length)
+			: m_payload{} {
+			// check lengths are correct
+			if (max_length > sizeof(m_payload)) set_error();
+			// copy the bytes over
+			else {
+				for (auto i = 0; i < max_length; i++) m_payload[i] = raw_packet[i];
+			}
+		}
+
+		// get the buffer
+		uint8_t operator[](const uint8_t index) const { m_payload[index]; }
+		const uint8_t* get_raw() const { return m_payload; }
+		// get the section that we're allowed to write to
+		uint8_t* get_write_start() { return &(m_payload[1]); }
+		const uint8_t* get_write_start() const { return &(m_payload[1]); }
+		// get the length we're allowed to write
+		constexpr uint8_t get_write_count() { return 252; }
+
+		// get the control
+		PacketCtrl get_control() const { return static_cast<PacketCtrl>(m_payload[0]); }
+		// set the control to an error if something invalid happens down the chain
+		void set_error() { m_payload[0] = PacketCtrl::ERROR; }
+		// calculate frame control sequence
+		// run this function right before the packet is sent, to ensure it is correct
+		void calc_framecheck(const uint8_t pos) { /* TODO: FRAMECHECK */ m_payload[pos] = 0xBE; m_payload[pos + 1] = 0xEF; }
+		// run this function right after the packet has been recieved to verify the packet
+		bool check_framecheck(const uint8_t pos) { return m_payload[pos] == 0xBE && m_payload[pos + 1] == 0xEF; }
+
+	private:
+		uint8_t m_payload[255];
+	};
+
+	class DataFragment : public Fragment {
+	public:
+		explicit DataFragment(const uint16_t dst_addr, const uint16_t src_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length, const uint16_t next_addr)
+			: Fragment(PacketCtrl::DATA_TRANS)
 			, m_next_hop_addr(next_addr) {
-			// copy the payload
-			for (auto i = 0; i < length; i++) m_payload[i] = raw_payload[i];
+			auto packet = get_write_start();
+			auto count = get_write_count();
+			const auto end_pos = length + 6;
+			// overflow check
+			if (end_pos > count) set_error();
+			else {
+				// copy our data into the payload
+				packet[0] = end_pos;
+				packet[1] = static_cast<uint8_t>(dst_addr & 0xff);
+				packet[2] = static_cast<uint8_t>(dst_addr >> 8);
+				packet[3] = static_cast<uint8_t>(src_addr & 0xff);
+				packet[4] = static_cast<uint8_t>(src_addr >> 8);
+				for (auto i = 0; i < length; i++) packet[i + 5] = raw_payload[i];
+				// calculate the FCS
+				calc_framecheck(end_pos);
+			}
 		}
 
-		explicit Fragment(const uint8_t* raw_packet, const uint16_t max_length)
-			: Fragment(static_cast<uint16_t>(raw_packet[2] << 8) | raw_packet[1],
-				static_cast<uint16_t>(raw_packet[4] << 8) | raw_packet[3],
-				raw_packet[5],
-				&raw_packet[7],
-				raw_packet[0] - 6,
-				ADDR_NONE) {}
-
-		explicit Fragment(const Fragment& rp, const uint16_t nexthop)
-			: Fragment(rp.m_dst_addr, rp.m_src_addr, rp.m_seq, rp.m_payload, rp.m_payload_len, nexthop) {}
-
-		uint16_t to_raw(uint8_t* buf, const uint16_t max_length) const {
-			const uint8_t frame_length = m_payload_len + 6;
-			if (max_length < frame_length || m_payload_len > 249) return 0;
-
-			buf[0] = frame_length;
-			buf[1] = static_cast<uint8_t>(m_dst_addr & 0xff);
-			buf[2] = static_cast<uint8_t>(m_dst_addr >> 8);
-			buf[3] = static_cast<uint8_t>(m_src_addr & 0xff);
-			buf[4] = static_cast<uint8_t>(m_src_addr >> 8);
-			for (auto i = 0; i < m_payload_len; i++) buf[i + 5] = m_payload[i];
-
-			return frame_length;
-		}
-
-		uint16_t to_raw(std::array<uint8_t, 255>& buf) const {
-			const uint8_t frame_length = m_payload_len + 6;
-			if (m_payload_len > 249) return 0;
-
-			buf[0] = frame_length;
-			buf[1] = static_cast<uint8_t>(m_dst_addr & 0xff);
-			buf[2] = static_cast<uint8_t>(m_dst_addr >> 8);
-			buf[3] = static_cast<uint8_t>(m_src_addr & 0xff);
-			buf[4] = static_cast<uint8_t>(m_src_addr >> 8);
-			for (auto i = 0; i < m_payload_len; i++) buf[i + 5] = m_payload[i];
-
-			return frame_length;
-		}
-
-		uint16_t get_dst() const { return m_dst_addr; }
-		uint16_t get_src() const { return m_src_addr; }
-		uint8_t* get_payload() { return m_payload; }
-		const uint8_t* get_payload() const { return m_payload; }
-		uint8_t get_payload_length() const { return m_payload_len; }
+		uint16_t get_dst() const { return static_cast<uint16_t>(get_write_start()[1]) | static_cast<uint16_t>(get_write_start()[2]) << 8; }
+		uint16_t get_src() const { return static_cast<uint16_t>(get_write_start()[3]) | static_cast<uint16_t>(get_write_start()[4]) << 8; }
+		uint8_t* get_payload() { return &(get_write_start()[5]); }
+		const uint8_t* get_payload() const { return &(get_write_start()[5]); }
+		uint8_t get_payload_length() const { const uint8_t num = get_write_start()[5]; return num >= 6 ? num - 6 : 0; }
+		void set_next_hop(const uint8_t next_hop) { m_next_hop_addr = next_hop; }
 		uint16_t get_next_hop() const { return m_next_hop_addr; }
 
 	private:
-		const uint16_t m_dst_addr;
-		const uint16_t m_src_addr;
-		const uint8_t m_seq;
-		uint8_t m_payload[149];
-		const uint8_t m_payload_len;
-		const uint16_t m_next_hop_addr;
+		uint16_t m_next_hop_addr;
+	};
+
+	class RefreshFragment : public Fragment {
+	public:
+		explicit RefreshFragment(const TimeInterval data_interval, const TimeInterval refresh_interval, const uint8_t count)
+			: Fragment(PacketCtrl::REFRESH_INITIAL) {
+			auto packet = get_write_start();
+			auto count = get_write_count();
+			// overflow check
+			if (6 > count) set_error();
+			else {
+				// copy our data into the payload
+				packet[0] = (data_interval.unit & 0x07) | ((refresh_interval.unit & 0x07) << 3);
+				packet[1] = static_cast<uint8_t>(data_interval.time & 0xFF);
+				packet[2] = static_cast<uint8_t>(refresh_interval.time & 0xFF);
+				packet[3] = static_cast<uint8_t>(refresh_interval.time >> 8);
+				packet[4] = 0;
+				packet[5] = count;
+			}
+		}
+
+		TimeInterval get_data_interval() const { return { get_write_start()[0] & 0x07, get_write_start()[1] }; }
+		TimeInterval get_refresh_interval() const { 
+			return { 
+				(get_write_start()[0] >> 3) & 0x07,
+				static_cast<uint16_t>(get_write_start()[2]) | static_cast<uint16_t>(get_write_start()[3]) << 8 
+			};
+		}
+		uint8_t get_count() const { return get_write_start()[5]; }
 	};
 }

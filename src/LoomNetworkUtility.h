@@ -11,6 +11,16 @@ namespace LoomNet {
 	constexpr uint16_t ADDR_COORD = 0xF000;
 	constexpr uint16_t ADDR_ERROR = 0xFFFF;
 	constexpr auto STRING_MAX = 32;
+	constexpr auto PROTOCOL_VER = 0;
+
+	enum PacketCtrl : uint8_t {
+		REFRESH_INITIAL		= 0 | (PROTOCOL_VER << 2),
+		REFRESH_ADDITONAL	= 1 | (PROTOCOL_VER << 2),
+		ERROR				= 3 | (PROTOCOL_VER << 2),
+		DATA_TRANS			= 4 | (PROTOCOL_VER << 2),
+		DATA_ACK			= 5 | (PROTOCOL_VER << 2),
+		DATA_ACK_W_DATA		= 6 | (PROTOCOL_VER << 2),
+	};
 
 	enum class DeviceType {
 		COORDINATOR,
@@ -20,8 +30,8 @@ namespace LoomNet {
 		ERROR,
 	};
 
-	struct TimeInverval {
-		enum class Unit : uint8_t {
+	struct TimeInterval {
+		enum Unit : uint8_t {
 			MICROSECOND = 0,
 			MILLISECOND = 1,
 			SECOND = 2,
@@ -30,12 +40,12 @@ namespace LoomNet {
 			DAY = 5,
 		};
 
-		TimeInverval(Unit _unit, uint16_t _time)
+		TimeInterval(Unit _unit, uint16_t _time)
 			: unit(_unit)
 			, time(_time) {}
 
-		TimeInverval(uint8_t _unit, uint16_t _time)
-			: TimeInverval(static_cast<Unit>(_unit), _time) {}
+		TimeInterval(uint8_t _unit, uint16_t _time)
+			: TimeInterval(static_cast<Unit>(_unit), _time) {}
 
 		const Unit unit;
 		const uint16_t time;

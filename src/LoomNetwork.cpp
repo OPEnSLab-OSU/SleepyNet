@@ -47,7 +47,6 @@ void Network<send_buffer, recv_buffer>::net_sleep_wake_ack()
 					// else we will try again later
 					// the MAC layer will automatically trigger a refresh if 
 					// sending fails consecutivly, so we don't need to do that here
-					// flip the send ready bit if we haven't already
 				}
 			}
 			// else tell the mac layer we got nothing
@@ -56,7 +55,7 @@ void Network<send_buffer, recv_buffer>::net_sleep_wake_ack()
 		// if the mac has data ready to be copied, do that
 		else if (mac_status == MAC::State::MAC_DATA_RECV_RDY) {
 			// create a lookahead copy of the fragment
-			const Fragment& recv_frag = m_mac.recv_fragment();
+			const DataFragment& recv_frag = m_mac.recv_fragment();
 			// if we have a fragment that is addressed to us, add it to the recv buffer
 			if (recv_frag.get_dst() == m_addr) {
 				if (!m_buffer_recv.emplace_back(recv_frag)) 
@@ -104,7 +103,7 @@ void Network<send_buffer, recv_buffer>::net_wait_ack()
 }
 
 template<size_t send_buffer, size_t recv_buffer>
-void Network<send_buffer, recv_buffer>::app_send(const Fragment& send)
+void Network<send_buffer, recv_buffer>::app_send(const DataFragment& send)
 {
 	// push the send fragment into the buffer
 	m_buffer_send.emplace_back(send);
@@ -129,10 +128,10 @@ void Network<send_buffer, recv_buffer>::app_send(const uint16_t dst_addr, const 
 }
 
 template<size_t send_buffer, size_t recv_buffer>
-Fragment Network<send_buffer, recv_buffer>::app_recv()
+DataFragment Network<send_buffer, recv_buffer>::app_recv()
 {
 	// create a copy of the last recieved object
-	const Fragment frag(m_buffer_recv.front());
+	const DataFragment frag(m_buffer_recv.front());
 	// destroy the stored object
 	m_buffer_recv.destroy_front();
 	// if the buffer is emptey, tell the user that there's no more data

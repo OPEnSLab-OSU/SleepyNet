@@ -47,5 +47,13 @@
     <ClInclude Include="..\..\..\src\LoomNetworkUtility.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\LoomSlotter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Topology.json">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

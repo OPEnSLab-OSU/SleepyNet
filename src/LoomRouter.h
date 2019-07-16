@@ -34,7 +34,8 @@ namespace LoomNet {
 			if (m_dev_type == DeviceType::ERROR 
 				|| m_self_addr == ADDR_ERROR 
 				|| m_self_addr == ADDR_NONE 
-				|| m_addr_parent == ADDR_ERROR) return ADDR_ERROR;
+				|| m_addr_parent == ADDR_ERROR
+				|| dst_addr == m_self_addr) return ADDR_ERROR;
 			// coordinators have special behavior
 			if (m_dev_type == DeviceType::COORDINATOR) {
 				// if there's a first router in the address, send to the first router

@@ -6,6 +6,7 @@
 #include "LoomNetworkUtility.h"
 #include "LoomMAC.h"
 #include "LoomRouter.h"
+#include "LoomSlotter.h"
 
 /**
  * Loom Network Layer
@@ -33,14 +34,14 @@ namespace LoomNet {
 			ROUTE_FAIL,
 		};
 
-		Network(const Router& route_info, std::map<uint16_t, std::array<uint8_t, 255>> & network_sim);
+		Network(const Router& route_info, const Slotter& slot_info);
 
-		TimeInverval net_sleep_next_wake_time() const { return m_mac.sleep_next_wake_time(); }
+		TimeInterval net_sleep_next_wake_time() const { return m_mac.sleep_next_wake_time(); }
 		void net_sleep_wake_ack();
 		void net_wait_ack();
-		void app_send(const Fragment& send);
+		void app_send(const DataFragment& send);
 		void app_send(const uint16_t dst_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length);
-		Fragment app_recv();
+		DataFragment app_recv();
 
 		void reset();
 		Error get_last_error() const { return m_last_error; }
@@ -56,8 +57,8 @@ namespace LoomNet {
 
 		const uint16_t m_addr;
 		//TODO: Implement in terms of a binary tree
-		CircularBuffer<Fragment, send_buffer> m_buffer_send;
-		CircularBuffer<Fragment, recv_buffer> m_buffer_recv;
+		CircularBuffer<DataFragment, send_buffer> m_buffer_send;
+		CircularBuffer<DataFragment, recv_buffer> m_buffer_recv;
 
 		Error m_last_error;
 		Status m_status;

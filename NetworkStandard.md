@@ -61,7 +61,7 @@ Based on the above topology, the network layer shall assign addresses to each de
 * Where:
   * First router: The address of the router closest to the coordinator on the path from the node to the Coordinator, starting from 1 and not including 16. If there is no router in between the end device and Coordinator, this value is zero.
   * Second router: The address of the router farthest from coordinator on the path from the node to the Coordinator, starting from 1. If there is less than two routers between the end device and coordinator, this value is zero.
-  * Node: The address of the end device itself, starting from 1. If this value is zero, the address is referring to the router with the last non-zero address.
+  * Node: The address of the end device itself, starting from 1. If this value is zero, the address is referring to the last router with a non-zero address.
 * Routers with paths to the Coordinator shall be assigned only the First Router component with the rest zero, and Routers one hop from the Coordinator shall be assigned the First Router from their parent and the Second Router as themselves with Node set to zero. Finally, each End Device is assigned a address in the Node field, inheriting First Router and Second Router from it's parents. Each time a field is assigned, it does so sequentially starting from 1 in order of appearance in the configuration. 
 
 The above address scheme limits Routers per device to 14, and nodes per router to 254.
@@ -189,7 +189,7 @@ Each device shall determine it's own time slot using network topology configurat
 * The tree is divided into layers, where each layer is defined by the number of devices in-between the device and the coordinator.
 * The end device on the greatest layer (with greatest number of routers on it's path from bottom to top) is chosen as the first node to transmit. If there are more than one node on the greatest layer, the one with the lowest address is chosen.
 * For every layer starting from the greatest layer, nodes are sub-ordered first by router, and then by address lowest-first.
-  * Routers on the layer above are ordered by lowest address first, and then the end-devices are sub-ordered by lowest address.
+  * Routers on the layer above are ordered by lowest address first, and then the end-devices are sub-ordered by lowest address. This allows routers to receive data from children devices in a single large window.
 * A fixed window time slot is assigned based on capability and child devices. Time slots for a given device are always consecutive.
   * A single time slot is granted for sensing capabilities.
   * A time slot is granted to a router for each device in a lower layer with:
@@ -204,6 +204,7 @@ A device, upon entering it's designated time slot, can transmit data to an upstr
 
 In addition to it's transmission period, a router shall remain listening to the network during its end devices' time slots. A coordinator shall be awake at all times.
 
+The number of data transactions per refresh cycle shall be provided in the device configuration, in addition to a data transaction interval in milliseconds. Data transactions shall happen consecutively every interval until the limit has been reached or the next refresh transaction, and then shall idle or sleep if the transactions are finished early.
 #### Packet Format
 
 Information sent during a Data transaction shall be formatted as follows:
@@ -213,7 +214,7 @@ Information sent during a Data transaction shall be formatted as follows:
 | 000 | Initial Refresh/Sync Data |
 | 001 | Additional Refresh/Sync Data |
 | 010 | Reserved |
-| 011 | Reserved |
+| 011 | Error |
 | 100 | Data Transmission |
 | 101 | Data ACK |
 | 110 | Data ACK w/ Transmission |

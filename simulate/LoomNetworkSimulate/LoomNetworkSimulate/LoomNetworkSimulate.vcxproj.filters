@@ -50,6 +50,9 @@
     <ClInclude Include="..\..\..\src\LoomSlotter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\LoomNetworkInfo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Topology.json">

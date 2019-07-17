@@ -34,7 +34,13 @@ namespace LoomNet {
 			ROUTE_FAIL,
 		};
 
-		Network(const Router& route_info, const Slotter& slot_info);
+		Network(const Router& route_info, const Slotter& slot_info, std::map<uint16_t, std::array<uint8_t, 255>> & network_sim);
+
+		bool operator==(const Network& rhs) const {
+			return (rhs.m_mac == m_mac)
+				&& (rhs.m_router == m_router)
+				&& (rhs.m_addr == m_addr);
+		}
 
 		TimeInterval net_sleep_next_wake_time() const { return m_mac.sleep_next_wake_time(); }
 		void net_sleep_wake_ack();

@@ -3,8 +3,8 @@
 using namespace LoomNet;
 
 template<size_t send_buffer, size_t recv_buffer>
-Network<send_buffer, recv_buffer>::Network(const Router& route_info, std::map<uint16_t, std::array<uint8_t, 255>> & network_sim)
-	: m_mac(route_info.get_self_addr(), network_sim)
+Network<send_buffer, recv_buffer>::Network(const Router& route_info, const Slotter& slot_info, std::map<uint16_t, std::array<uint8_t, 255>> & network_sim)
+	: m_mac(route_info.get_self_addr(), route_info.get_device_type(), slot_info, network_sim)
 	, m_router(route_info)
 	, m_buffer_send()
 	, m_buffer_recv()

@@ -4,6 +4,7 @@
 #include <array>
 #include "LoomNetworkFragment.h"
 #include "LoomNetworkUtility.h"
+#include "LoomSlotter.h"
 
 /** 
  * Loom Medium Access Control 
@@ -24,11 +25,12 @@ namespace LoomNet {
 
 		enum class Error {
 			MAC_OK,
-			SEND_FAILED,
+			SEND_FAILED
 		};
 
-		MAC(const uint16_t self_addr, const DeviceType self_type, std::map<uint16_t, std::array<uint8_t, 255>>& network_sim)
-			: m_state(State::MAC_WAIT_REFRESH)
+		MAC(const uint16_t self_addr, const DeviceType self_type, const Slotter& slot, std::map<uint16_t, std::array<uint8_t, 255>>& network_sim)
+			: m_slot(slot)
+			, m_state(State::MAC_WAIT_REFRESH)
 			, m_last_error(Error::MAC_OK)
 			, m_cur_send_addr(ADDR_NONE)
 			, m_network(network_sim)
@@ -36,6 +38,12 @@ namespace LoomNet {
 			, m_self_type(self_type) {
 			// add our address to the map (SIMULATION ONLY)
 			m_network.emplace(self_addr, std::array<uint8_t, 255>());
+		}
+
+		bool operator==(const MAC& rhs) const {
+			return (rhs.m_slot == m_slot)
+				&& (rhs.m_self_addr == m_self_addr)
+				&& (rhs.m_self_type == m_self_type);
 		}
 
 		State get_state() const { return m_state; }
@@ -61,7 +69,7 @@ namespace LoomNet {
 			// write to the "network"
 			std::array<uint8_t, 255> & send_ray = m_network.at(frag.get_next_hop());
 			// write the network fragment to the array
-			for (auto i = 0; i < send_ray.size(); i++) send_ray[i] = frag.get_raw[i];
+			for (uint8_t i = 0; i < send_ray.size(); i++) send_ray[i] = frag[i];
 			// check if we have data to "recieve"
 			std::array<uint8_t, 255> & recv_ray = m_network.at(m_self_addr);
 			// data is sent! now to change the state
@@ -83,12 +91,13 @@ namespace LoomNet {
 			// TODO: timing stuff here?
 			else {
 				for (auto buf : m_network) {
-					buf = 
+					// buf = 
 				}
 			}
 		}
 
 	private:
+		Slotter m_slot;
 		State m_state;
 		Error m_last_error;
 		uint16_t m_cur_send_addr;

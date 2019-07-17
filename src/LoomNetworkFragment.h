@@ -87,9 +87,9 @@ namespace LoomNet {
 		explicit RefreshFragment(const TimeInterval data_interval, const TimeInterval refresh_interval, const uint8_t count)
 			: Fragment(PacketCtrl::REFRESH_INITIAL) {
 			auto packet = get_write_start();
-			auto count = get_write_count();
+			auto pkt_count = get_write_count();
 			// overflow check
-			if (6 > count) set_error();
+			if (6 > pkt_count) set_error();
 			else {
 				// copy our data into the payload
 				packet[0] = (data_interval.unit & 0x07) | ((refresh_interval.unit & 0x07) << 3);
@@ -101,12 +101,12 @@ namespace LoomNet {
 			}
 		}
 
-		TimeInterval get_data_interval() const { return { get_write_start()[0] & 0x07, get_write_start()[1] }; }
+		TimeInterval get_data_interval() const { return TimeInterval(get_write_start()[0] & static_cast<uint8_t>(0x07), get_write_start()[1]); }
 		TimeInterval get_refresh_interval() const { 
-			return { 
-				(get_write_start()[0] >> 3) & 0x07,
-				static_cast<uint16_t>(get_write_start()[2]) | static_cast<uint16_t>(get_write_start()[3]) << 8 
-			};
+			return TimeInterval(
+				(get_write_start()[0] >> 3) & static_cast<uint8_t>(0x07),
+				static_cast<uint16_t>(get_write_start()[2]) | (static_cast<uint16_t>(get_write_start()[3]) << static_cast<uint16_t>(8))
+			);
 		}
 		uint8_t get_count() const { return get_write_start()[5]; }
 	};

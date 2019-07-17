@@ -16,14 +16,23 @@ namespace LoomNet {
 			WAIT_CHILD,
 			WAIT_REFRESH,
 			WAIT_NEXT_DATA,
+			ERROR
 		};
 
-		Slotter(const uint8_t send_slot, const uint8_t recv_slot, const uint8_t cycles_per_refresh)
+		Slotter(const uint8_t send_slot, const uint8_t recv_slot, const uint8_t recv_len, const uint8_t cycles_per_refresh)
 			: m_send_slot(send_slot)
 			, m_recv_slot(recv_slot)
+			, m_recv_len(recv_len)
 			, m_cycles_per_refresh(cycles_per_refresh)
-			, m_state(State::WAIT_REFRESH)
+			, m_state(send_slot != SLOT_ERROR && recv_slot != SLOT_ERROR ? State::WAIT_REFRESH : State::ERROR)
 			, m_cur_cycle(0) {}
+
+		bool operator==(const Slotter& rhs) const {
+			return (rhs.m_send_slot == m_send_slot)
+				&& (rhs.m_recv_slot == m_recv_slot)
+				&& (rhs.m_recv_len == m_recv_len)
+				&& (rhs.m_cycles_per_refresh == m_cycles_per_refresh);
+		}
 
 		uint8_t get_send_slot() const { return m_send_slot; }
 		uint8_t get_recv_slot() const { return m_recv_slot; }
@@ -32,6 +41,7 @@ namespace LoomNet {
 		State next_state() {
 			// if we were waiting for a refresh, we wait for children next
 			// if we don't have any children then parent
+			if (m_state == State::ERROR) return m_state;
 			if (m_state == State::WAIT_REFRESH) {
 				if (m_recv_slot == 0) return m_state = State::WAIT_PARENT;
 				else return m_state = State::WAIT_CHILD;
@@ -58,8 +68,11 @@ namespace LoomNet {
 	private:
 		const uint8_t m_send_slot;
 		const uint8_t m_recv_slot;
+		const uint8_t m_recv_len;
 		const uint8_t m_cycles_per_refresh;
 		State m_state;
 		uint8_t m_cur_cycle;
 	};
+
+	const Slotter SLOTTER_ERROR = Slotter(SLOT_ERROR, SLOT_ERROR, 0, 0);
 }

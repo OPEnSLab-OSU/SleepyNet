@@ -66,82 +66,98 @@ static uint16_t m_recurse_traverse(const JsonObjectConst& parent, const char* se
 	return LoomNet::ADDR_NONE;
 }
 
-static uint8_t m_count_slots(const JsonArrayConst& children) {
-	if (children.isNull()) return 0;
-	// traverse the tree, adding up slots in a depth-first manner
-	uint8_t total = 0;
-	for (JsonObjectConst device : children) {
-		// get device type
-		const uint8_t type = device["type"] | 255;
-		// if the device is an end device, add a slot
-		if (type == 255) return 0;
-		else if (type == 0) total++;
-		// if the device is a first or second router, search the children recursivley
-		else if (type == 1) {
-			// add a slot for sensing capabilities
-			if (!(device["sensor"].as<bool>() | true)) total++;
-			// search children
-			total += m_count_slots(device["children"]);
-		}
+static uint8_t m_count_slots_self(const JsonObjectConst& parent, uint8_t& total) {
+	const JsonArrayConst children = parent["children"];
+	// if we found an end device, add one to self and total
+	if (children.isNull()) {
+		total++;
+		return 1;
 	}
-	return total;
+	// else traverse the children tree, adding up slots in a depth-first manner
+	uint8_t self_slots = 0;
+	for (JsonObjectConst device : children) {
+		// search the children recursivley
+		self_slots += m_count_slots_self(device, total);
+	}
+	// add a slot for sensing capabilities
+	if (parent["sensor"].as<bool>()) self_slots++;
+	// add to total and return!
+	total += self_slots;
+	return self_slots;
+}
+
+static uint8_t m_count_slots_children(const JsonObjectConst& parent, uint8_t& total) {
+	uint8_t pass = 0;
+	const JsonArrayConst children = parent["children"];
+	for (const JsonObjectConst device : children)
+		pass += m_count_slots_self(device, total);
+	return pass;
 }
 
 static uint8_t m_count_slots_layer(const JsonObjectConst& obj, const uint8_t layer, const char* self_name, const LoomNet::DeviceType self_type, bool& found_device) {
 	// create a breadth-first array of the nodes so we can traverse them in reverse order
 	const JsonArrayConst children = obj["children"];
-	// if we're on the right layer, count all the slots of the objects to the left of this one
 	uint8_t total = 0;
-	if (layer == 0) {
-		// if we found an end device, add one to the total
-		if (children.isNull()) total++;
-		// else search the children
-		else {
-			// count only routers first
-			for (const auto device : children) {
-				const uint8_t type = device["type"] | static_cast<uint8_t>(255);
-				if (type == 255) return LoomNet::SLOT_ERROR;
-				if (type == 1) {
+	// if we're not on the right layer, recurse
+	if (layer != 0) {
+		for (const auto device : children) {
+			const uint8_t type = device["type"] | 255;
+			if (type == 255) return LoomNet::SLOT_ERROR;
+			if (type == 1) {
+				const char* debug_name = device["name"];
+				const auto out = m_count_slots_layer(device, layer - 1, self_name, self_type, found_device);
+				if (out == LoomNet::SLOT_ERROR)
+					return LoomNet::SLOT_ERROR;
+				total += out;
+			}
+		}
+	}
+	// else count the childrens slots on this layer, stopping when we find the device we're looking for
+	else {
+		// if we're on the right layer, count all the slots of the objects to the left of this one
+		// count only routers first
+		for (const auto device : children) {
+			const char* debug_name = device["name"];
+
+			const uint8_t type = device["type"] | static_cast<uint8_t>(255);
+			if (type == 255) return LoomNet::SLOT_ERROR;
+			if (type == 1) {
+				if (!found_device) {
 					if ((self_type == LoomNet::DeviceType::FIRST_ROUTER
 						|| self_type == LoomNet::DeviceType::SECOND_ROUTER)
 						&& !strncmp(device["name"].as<const char*>(), self_name, LoomNet::STRING_MAX)) {
-						// we found our device! return how many slots we counted
+						// we found our device!
 						found_device = true;
-						return total;
 					}
-					// else continue counting
-					else {
-						total += m_count_slots(device["children"]);
-						// add a slot for sensing capabilities
-						if (!(device["sensor"].as<bool>() | true)) total++;
-					}
+					// add a slot for sensing capabilities
+					if (!found_device && device["sensor"].as<bool>()) total++;
 				}
+				// count the childrens slots, then add a slot to transmit for each of them
+				uint8_t child_slot_total = 0;
+				const auto pass_slots = m_count_slots_children(device, child_slot_total);
+				total += child_slot_total;
+				if (!found_device) total += pass_slots;
 			}
-			// next count end devices
+		}
+		// next count end devices, but only if we haven't found our device
+		if (!found_device) {
 			for (const auto device : children) {
 				const uint8_t type = device["type"] | static_cast<uint8_t>(255);
 				if (type == 255) return LoomNet::SLOT_ERROR;
 				if (type == 0) {
 					if (self_type == LoomNet::DeviceType::END_DEVICE
 						&& !strncmp(device["name"].as<const char*>(), self_name, LoomNet::STRING_MAX)) {
-						// we found our device! return how many slots we counted
+						// we found our device! we can stop counting
 						found_device = true;
-						return total;
+						break;
 					}
-					// else continue counting
-					else total++;
+					// continue counting
+					total++;
 				}
 			}
 		}
 	}
-	// else recurse until we are
-	else 
-		for (const auto device : children) {
-			if (!found_device)
-				total += m_count_slots_layer(device, layer - 1, self_name, self_type, found_device);
-			else return total;
-		}
-			
+	// all done!
 	return total;
 }
 
@@ -171,6 +187,7 @@ namespace LoomNet {
 			type = DeviceType::COORDINATOR;
 			address = ADDR_COORD;
 			parent = ADDR_NONE;
+			self_obj = root_obj;
 		}
 		// else its a router or end device!
 		else {
@@ -225,15 +242,13 @@ namespace LoomNet {
 		if (type != DeviceType::END_DEVICE) {
 			// find the highest priority child
 			JsonObjectConst highest_child;
-			const JsonArrayConst children = self_obj["children"];
-			for (const JsonObjectConst child : children) {
+			for (const JsonObjectConst child : ray) {
 				const uint8_t type = child["type"] | static_cast<uint8_t>(255);
 				if (type == 1) {
 					highest_child = child;
 					break;
 				}
 				else if (type == 0 && highest_child.isNull()) highest_child = child;
-				else break;
 			}
 			// count it's slots
 			if (!highest_child.isNull()) {
@@ -244,7 +259,8 @@ namespace LoomNet {
 						? DeviceType::FIRST_ROUTER
 						: DeviceType::SECOND_ROUTER);
 				child_slot = m_count_slots_layer_call(root_obj, depth + 1, highest_child["name"], detailed_type);
-				child_slot_count = m_count_slots(self_obj["children"]);
+				uint8_t slot_total = 0;
+				child_slot_count = m_count_slots_children(self_obj, slot_total);
 			}
 		}
 		else if (type != DeviceType::ERROR) child_slot = SLOT_NONE;

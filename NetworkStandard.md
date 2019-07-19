@@ -205,14 +205,13 @@ Information sent during a Data transaction shall be formatted as follows:
 
 | Three-Bit Code | Packet Type |
 | --- | --- |
-| 000 | Initial Refresh/Sync Data |
-| 001 | Additional Refresh/Sync Data |
+| 100 | Initial Refresh/Sync Data |
+| 011 | Additional Refresh/Sync Data |
+| 001 | Error |
+| 101 | Data Transmission |
+| 110 | Data ACK |
+| 111 | Data ACK w/ Transmission |
 | 010 | Reserved |
-| 011 | Error |
-| 100 | Data Transmission |
-| 101 | Data ACK |
-| 110 | Data ACK w/ Transmission |
-| 111 | Reserved |
 
 ```
 +---------+---------+----------------+---------+

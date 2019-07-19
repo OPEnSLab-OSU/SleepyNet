@@ -40,11 +40,15 @@ namespace LoomNet {
 		PacketCtrl get_control() const { return static_cast<PacketCtrl>(m_payload[0]); }
 		// set the control to an error if something invalid happens down the chain
 		void set_error() { m_payload[0] = PacketCtrl::ERROR; }
+		void set_src(const uint16_t src_addr) { 
+			m_payload[1] = static_cast<uint8_t>(src_addr & 0xff);
+			m_payload[2] = static_cast<uint8_t>(src_addr >> 8);
+		}
 		// calculate frame control sequence
 		// run this function right before the packet is sent, to ensure it is correct
-		void calc_framecheck(const uint8_t pos) { /* TODO: FRAMECHECK */ m_payload[pos] = 0xBE; m_payload[pos + 1] = 0xEF; }
+		void calc_framecheck(const uint8_t endpos) { /* TODO: FRAMECHECK */ m_payload[endpos] = 0xBE; m_payload[endpos + 1] = 0xEF; }
 		// run this function right after the packet has been recieved to verify the packet
-		bool check_framecheck(const uint8_t pos) { return m_payload[pos] == 0xBE && m_payload[pos + 1] == 0xEF; }
+		bool check_framecheck(const uint8_t endpos) { return m_payload[endpos] == 0xBE && m_payload[endpos + 1] == 0xEF; }
 
 	private:
 		uint8_t m_payload[255];
@@ -74,10 +78,11 @@ namespace LoomNet {
 		}
 
 		uint16_t get_dst() const { return static_cast<uint16_t>(get_write_start()[1]) | static_cast<uint16_t>(get_write_start()[2]) << 8; }
-		uint16_t get_src() const { return static_cast<uint16_t>(get_write_start()[3]) | static_cast<uint16_t>(get_write_start()[4]) << 8; }
+		uint16_t get_orig_src() const { return static_cast<uint16_t>(get_write_start()[3]) | static_cast<uint16_t>(get_write_start()[4]) << 8; }
 		uint8_t* get_payload() { return &(get_write_start()[5]); }
 		const uint8_t* get_payload() const { return &(get_write_start()[5]); }
 		uint8_t get_payload_length() const { const uint8_t num = get_write_start()[5]; return num >= 6 ? num - 6 : 0; }
+		uint8_t get_fragment_length() const { return get_payload_length() + 5; }
 		void set_next_hop(const uint8_t next_hop) { m_next_hop_addr = next_hop; }
 		uint16_t get_next_hop() const { return m_next_hop_addr; }
 

@@ -20,6 +20,8 @@ namespace LoomNet {
 		DeviceType get_device_type() const { return m_dev_type; }
 		uint16_t get_self_addr() const { return m_self_addr; }
 		uint16_t get_addr_parent() const { return m_addr_parent; }
+		uint8_t get_router_count() const { return m_router_child_count; }
+		uint8_t get_node_count() const { return m_node_child_count; }
 
 		bool operator==(const Router& rhs) const {
 			return (rhs.get_addr_parent() == get_addr_parent())

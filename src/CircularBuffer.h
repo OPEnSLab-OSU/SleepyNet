@@ -196,6 +196,30 @@ public:
 		m_length--;
 	}
 
+	/** destroy at index */
+	void remove(const CircularBuffer<T, max_size>::Iterator& iter) {
+		// destroy the element
+		(*iter).~T();
+		// copy the memory over from the back or the front, whichever is closest
+		if (iter.m_index >= (m_length >> 1)) {
+			// copy from the back
+			for (auto i = iter.m_index; i < m_length - 1; i++) {
+				m_array[m_get_true_index(i, m_start)] = m_array[m_get_true_index(i + 1, m_start)];
+			}
+		}
+		else {
+			// copy from the front
+			for (auto i = iter.m_index; i > 0; i--) {
+				m_array[m_get_true_index(i, m_start)] = m_array[m_get_true_index(i - 1, m_start)];
+			}
+			// inc start
+			if (m_start == max_size - 1) m_start = 0;
+			else m_start++;
+		}
+		// dec length
+		m_length--;
+	}
+
 private:
 	
 	static size_t m_get_true_index(const size_t index, const size_t m_start) {

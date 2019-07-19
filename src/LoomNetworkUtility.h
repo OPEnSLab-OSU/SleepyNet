@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 /**
  * Some utility structures and constants to be used by Loom Network
@@ -15,14 +16,15 @@ namespace LoomNet {
 	constexpr auto STRING_MAX = 32;
 	constexpr auto PROTOCOL_VER = 0;
 	constexpr auto MAX_DEVICES = 255;
+	constexpr auto CYCLES_PER_REFRESH = 5;
 
 	enum PacketCtrl : uint8_t {
-		REFRESH_INITIAL		= 0 | (PROTOCOL_VER << 2),
-		REFRESH_ADDITONAL	= 1 | (PROTOCOL_VER << 2),
-		ERROR				= 3 | (PROTOCOL_VER << 2),
-		DATA_TRANS			= 4 | (PROTOCOL_VER << 2),
-		DATA_ACK			= 5 | (PROTOCOL_VER << 2),
-		DATA_ACK_W_DATA		= 6 | (PROTOCOL_VER << 2)
+		REFRESH_INITIAL		= 0b100 | (PROTOCOL_VER << 2),
+		REFRESH_ADDITONAL	= 0b011 | (PROTOCOL_VER << 2),
+		ERROR				= 0b001 | (PROTOCOL_VER << 2),
+		DATA_TRANS			= 0b101 | (PROTOCOL_VER << 2),
+		DATA_ACK			= 0b110 | (PROTOCOL_VER << 2),
+		DATA_ACK_W_DATA		= 0b111 | (PROTOCOL_VER << 2),
 	};
 
 	enum class DeviceType {
@@ -52,5 +54,22 @@ namespace LoomNet {
 
 		const Unit unit;
 		const uint16_t time;
+	};
+
+	class NetworkSim {
+	public:
+		NetworkSim()
+			: m_net_write([](const std::array<uint8_t, 255> & packet) {})
+			, m_net_read([]() { return std::array<uint8_t, 255>(); }) {}
+
+		void set_net_write(const std::function<void(std::array<uint8_t, 255>)>& func) { m_net_write = func; }
+		void set_net_read(const std::function<std::array<uint8_t, 255>(void)> & func) { m_net_read = func; }
+
+		void net_write(const std::array<uint8_t, 255> & packet) const { m_net_write(packet); }
+		std::array<uint8_t, 255> net_read() const { return m_net_read(); }
+
+	private:
+		std::function<void(std::array<uint8_t, 255>)> m_net_write;
+		std::function<std::array<uint8_t, 255>(void)> m_net_read;
 	};
 }

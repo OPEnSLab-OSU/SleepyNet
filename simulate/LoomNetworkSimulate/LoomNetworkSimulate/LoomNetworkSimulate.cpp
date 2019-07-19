@@ -5,6 +5,7 @@
 #include "../../../src/CircularBuffer.h"
 #include "../../../src/LoomRouter.h"
 #include "../../../src/LoomNetworkConfig.h"
+#include "../../../src/LoomNetworkInfo.h"
 #include <iostream>
 #include <vector>
 
@@ -145,11 +146,10 @@ int main()
 	std::cout << "begin testing Loom Network operation" << std::endl;
 
 	{
-		/*
 		using namespace LoomNet;
 		// intitialize a bunch of network objects and a map to simulate network packets
-		std::map<uint16_t, std::array<uint8_t, 255>> sim_net;
-		std::array<Network<16U, 16U>, 13> devices{{
+		NetworkSim sim_net;
+		std::array<Network<16,16>, 13> devices{{
 			{ read_network_topology(obj, "Router 2 End Device 1"), sim_net },
 			{ read_network_topology(obj, "Router 2"), sim_net },
 			{ read_network_topology(obj, "Router 1 End Device 3"), sim_net },
@@ -164,9 +164,60 @@ int main()
 			{ read_network_topology(obj, "End Device 1"), sim_net },
 			{ read_network_topology(obj, "BillyTheCoord"), sim_net }
 		}};
-		*/
-		// prep them all by simulating a refresh
-
+		// prep the network simulator
+		std::array<uint8_t, 255> airwaves;
+		bool busy = false;
+		std::array<unsigned, 13> next_wake_times;
+		constexpr auto NET_ITER = 100;
+		using NetStatus = Network<16, 16>::Status;
+		// every time any device writes to the network
+		sim_net.set_net_write([&airwaves, &busy](std::array<uint8_t, 255> packet) {
+			if (busy) {
+				std::cout << "Collision!" << std::endl;
+			}
+			// set the airwaves
+			airwaves = packet;
+			busy = true;
+		});
+		// every time any device reads from the network
+		sim_net.set_net_read([&airwaves, &busy]() {
+			if (busy) {
+				// not busy anymore! we read already
+				busy = false;
+				return airwaves;
+			}
+			return std::array<uint8_t, 255>();
+		});
+		// iterate!
+		for (auto slot = 0; slot < NET_ITER; slot++) {
+			std::cout << "Slot: " << slot << std::endl;
+			// wake all the devices that scheduled a wakeup now
+			std::cout << "	Woke: ";
+			for (auto o = 0; o < devices.size(); o++) {
+				if (slot > next_wake_times[o]) {
+					devices[o].net_sleep_wake_ack();
+					std::cout << "0x" << std::hex << devices[o].get_router().get_self_addr() << ", ";
+				}
+			}
+			std::cout << std::endl;
+			// iterate through each element until all of them are asleep, then move to the next slot
+			bool run_again = false;
+			do {
+				for (auto i = 0; i < devices.size(); i++) {
+					const uint8_t status = devices[i].get_status();
+					if (status == NetStatus::NET_CLOSED)
+						std::cout << std::hex << devices[i].get_router().get_self_addr() << " closed!" << std::endl;
+					// sleep check
+					else if (status & NetStatus::NET_SLEEP_RDY) {
+						run_again = true;
+						next_wake_times[i] += devices[i].net_sleep_next_wake_time().time;
+					}
+					// TODO: Send/Recvieve data!
+					// run the state machine
+					devices[i].net_update();
+				}
+			} while (!run_again);
+		}
 	}
 
 	std::cout << "end testing Loom Network operation" << std::endl;

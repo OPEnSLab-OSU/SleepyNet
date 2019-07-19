@@ -1,8 +1,6 @@
 #pragma once
-#include "LoomRouter.h"
-#include "LoomSlotter.h"
-#include "LoomNetworkUtility.h"
 #include "LoomNetworkInfo.h"
+#include "LoomNetworkUtility.h"
 #include <ArduinoJson.h>
 #include <cstdint>
 #include <limits>
@@ -272,7 +270,7 @@ namespace LoomNet {
 			},
 			{
 				self_slot,
-				topology["config"]["cycles_per_refresh"].as<uint8_t>(),
+				topology["config"]["cycles_per_refresh"] | LoomNet::CYCLES_PER_REFRESH,
 				child_slot,
 				child_slot_count
 			}

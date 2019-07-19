@@ -146,14 +146,10 @@ If a coordinator would like to send additional routing data during a refresh per
 
 Initial Refresh Packet
 ```
-+---------+------------------+-------------+--
-| Control | Interval Control | Data Offset |
-| 8 Bits  | 8 Bits           | 8 Bits      |
-+---------+------------------+-------------+--
-----------------+----------+--------+---------+
- Refresh Offset | Reserved | Count  | FCS     |
- 16 Bits        | 8 Bits   | 8 Bits | 16 Bits |
-----------------+----------+--------+---------+
+----+------------------+-------------+----------------+----------+--------+----
+    | Interval Control | Data Offset | Refresh Offset | Reserved | Count  |
+    | 8 Bits           | 8 Bits      | 16 Bits        | 8 Bits   | 8 Bits |
+----+------------------+-------------+----------------+----------+--------+----
 ```
 
 Where:
@@ -170,18 +166,16 @@ Where:
 
 Additional refresh packet
 ```
-+---------+--------------+----------+---------+---------+
-| Control | Frame Length | Reserved | Payload | FCS     |
-| 8 Bits  | 8 Bits       | 8 Bits   | n Bits  | 16 Bits |
-+---------+--------------+----------+---------+---------+
+----+--------------+----------+---------+----
+    | Frame Length | Reserved | Payload |
+    | 8 Bits       | 8 Bits   | n Bits  |
+----+--------------+----------+---------+----
 ```
 
 Where:
-* **Control**: See data transaction packet format.
 * **Frame Length**: The size of the refresh packet in bytes, not including the control frame. (Frame Length + Reserved + Payload + FCS) as an unsigned byte.
 * **Reserved**: Discard.
 * **Payload**: A sequence of data bytes (no longer than 251 bytes)
-* **FCS**: See data transaction payload format.
 
 ### Data Transaction
 
@@ -221,15 +215,16 @@ Information sent during a Data transaction shall be formatted as follows:
 | 111 | Reserved |
 
 ```
-+---------+----------------+---------+
-| Control | Network Packet | FCS     |
-| 8 Bits  | 56-252 Bytes   | 16 Bits |
-+---------+----------------+---------+
++---------+---------+----------------+---------+
+| Control | Source  | Network Packet | FCS     |
+| 8 Bits  | 16 Bits | 56-250 Bytes   | 16 Bits |
++---------+---------+----------------+---------+
 ```
 * **Control**
   * Bits 0-2: Packet type, shown in table above.
   * Bits 3-4: Protocol version, as of this draft 0.
   * Bits 4-5: Reserved.
+* **Source** The address of the device that sent this packet. Not to be confused with the original source, which is ignored by the MAC layer.
 * **Network Packet** See the network packet structure.
 * **FCS** A verification mechanism calculated using a 16-bit CRC with the polynomial `x^16+x^12+x^5+1`. The calculation of this value shall include the entire packet structure, excluding the checksum itself.
 

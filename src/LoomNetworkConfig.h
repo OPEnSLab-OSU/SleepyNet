@@ -104,7 +104,6 @@ static uint8_t m_count_slots_layer(const JsonObjectConst& obj, const uint8_t lay
 			const uint8_t type = device["type"] | 255;
 			if (type == 255) return LoomNet::SLOT_ERROR;
 			if (type == 1) {
-				const char* debug_name = device["name"];
 				const auto out = m_count_slots_layer(device, layer - 1, self_name, self_type, found_device);
 				if (out == LoomNet::SLOT_ERROR)
 					return LoomNet::SLOT_ERROR;
@@ -117,8 +116,6 @@ static uint8_t m_count_slots_layer(const JsonObjectConst& obj, const uint8_t lay
 		// if we're on the right layer, count all the slots of the objects to the left of this one
 		// count only routers first
 		for (const auto device : children) {
-			const char* debug_name = device["name"];
-
 			const uint8_t type = device["type"] | static_cast<uint8_t>(255);
 			if (type == 255) return LoomNet::SLOT_ERROR;
 			if (type == 1) {
@@ -129,7 +126,7 @@ static uint8_t m_count_slots_layer(const JsonObjectConst& obj, const uint8_t lay
 						// we found our device!
 						found_device = true;
 					}
-					// add a slot for sensing capabilities
+					// add a slot for sensing capabilities, but don't count ourself
 					if (!found_device && device["sensor"].as<bool>()) total++;
 				}
 				// count the childrens slots, then add a slot to transmit for each of them
@@ -275,9 +272,9 @@ namespace LoomNet {
 			},
 			{
 				self_slot,
+				topology["config"]["cycles_per_refresh"].as<uint8_t>(),
 				child_slot,
-				child_slot_count,
-				topology["config"]["cycles_per_refresh"].as<uint8_t>()
+				child_slot_count
 			}
 		};
 	}

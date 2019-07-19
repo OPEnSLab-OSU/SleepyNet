@@ -19,18 +19,23 @@ namespace LoomNet {
 			ERROR
 		};
 
-		Slotter(const uint8_t send_slot, const uint8_t recv_slot, const uint8_t recv_len, const uint8_t cycles_per_refresh)
+		Slotter(	const uint8_t send_slot, 
+					const uint8_t cycles_per_refresh, 
+					const uint8_t recv_slot, 
+					const uint8_t recv_count)
 			: m_send_slot(send_slot)
 			, m_recv_slot(recv_slot)
-			, m_recv_len(recv_len)
+			, m_recv_count(recv_count)
 			, m_cycles_per_refresh(cycles_per_refresh)
 			, m_state(send_slot != SLOT_ERROR && recv_slot != SLOT_ERROR ? State::WAIT_REFRESH : State::ERROR)
 			, m_cur_cycle(0) {}
+		
+		Slotter(const uint8_t send_slot, const uint8_t cycles_per_refresh)
+			: Slotter(send_slot, cycles_per_refresh, SLOT_NONE, 0) {}
 
 		bool operator==(const Slotter& rhs) const {
 			return (rhs.m_send_slot == m_send_slot)
 				&& (rhs.m_recv_slot == m_recv_slot)
-				&& (rhs.m_recv_len == m_recv_len)
 				&& (rhs.m_cycles_per_refresh == m_cycles_per_refresh);
 		}
 
@@ -68,11 +73,11 @@ namespace LoomNet {
 	private:
 		const uint8_t m_send_slot;
 		const uint8_t m_recv_slot;
-		const uint8_t m_recv_len;
+		const uint8_t m_recv_count;
 		const uint8_t m_cycles_per_refresh;
 		State m_state;
 		uint8_t m_cur_cycle;
 	};
 
-	const Slotter SLOTTER_ERROR = Slotter(SLOT_ERROR, SLOT_ERROR, 0, 0);
+	const Slotter SLOTTER_ERROR = Slotter(SLOT_ERROR, 0, SLOT_ERROR, 0);
 }

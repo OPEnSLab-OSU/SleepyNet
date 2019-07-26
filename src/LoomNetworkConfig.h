@@ -259,6 +259,15 @@ namespace LoomNet {
 			}
 		}
 		else if (type != DeviceType::ERROR) child_slot = SLOT_NONE;
+		// figure our how many slots to send based on than number
+		uint8_t send_slots = SLOT_ERROR;
+		if (type == DeviceType::END_DEVICE) send_slots = 1;
+		else if (type == DeviceType::COORDINATOR) send_slots = 0;
+		else if (self_obj["sensor"] | false) send_slots = child_slot_count + 1;
+		else send_slots = child_slot_count;
+		// finally count total slots in the entire network
+		uint8_t total_slots = 0;
+		m_count_slots_children(root_obj, total_slots);
 		// return it all! jesus christ
 		return {
 			{
@@ -270,7 +279,9 @@ namespace LoomNet {
 			},
 			{
 				self_slot,
+				total_slots,
 				topology["config"]["cycles_per_refresh"] | LoomNet::CYCLES_PER_REFRESH,
+				send_slots,
 				child_slot,
 				child_slot_count
 			}

@@ -8,6 +8,8 @@
 #include "../../../src/LoomNetworkInfo.h"
 #include <iostream>
 #include <vector>
+#include <bitset>
+#include <iomanip>
 
 class Int {
 public:
@@ -104,22 +106,22 @@ int main()
 
 	{
 		using namespace LoomNet;
-		test_address(read_network_topology(obj, "Router 3 Router 1 End Device 1"),	Router(DeviceType::END_DEVICE, 0x3101, 0x3100, 0, 0),			Slotter(3, 0), "Router 3 Router 1 End Device 1");
-		test_address(read_network_topology(obj, "Router 3 Router 1"),				Router(DeviceType::SECOND_ROUTER, 0x3100, 0x3000, 0, 1),		Slotter(12, 0, 3, 1), "Router 3 Router 1");
-		test_address(read_network_topology(obj, "Router 3"),						Router(DeviceType::FIRST_ROUTER, 0x3000, ADDR_COORD, 1, 0),		Slotter(22, 0, 12, 1), "Router 3");
-		test_address(read_network_topology(obj, "Router 2 End Device 1"),			Router(DeviceType::END_DEVICE, 0x2001, 0x2000, 0, 0),			Slotter(11, 0), "Router 2 End Device 1");
-		test_address(read_network_topology(obj, "Router 2"),						Router(DeviceType::FIRST_ROUTER, 0x2000, ADDR_COORD, 0, 1),		Slotter(20, 0, 11, 1), "Router 2");
-		test_address(read_network_topology(obj, "Router 1 End Device 3"),			Router(DeviceType::END_DEVICE, 0x1003, 0x1000, 0, 0),			Slotter(10, 0), "Router 1 End Device 3");
-		test_address(read_network_topology(obj, "Router 1 Router 2"),				Router(DeviceType::SECOND_ROUTER, 0x1200, 0x1000, 0, 2),		Slotter(5, 0, 1, 2), "Router 1 Router 2");
-		test_address(read_network_topology(obj, "Router 1 Router 2 End Device 1"),	Router(DeviceType::END_DEVICE, 0x1201, 0x1200, 0, 0),			Slotter(1, 0), "Router 1 Router 2 End Device 1");
-		test_address(read_network_topology(obj, "Router 1 Router 2 End Device 2"),	Router(DeviceType::END_DEVICE, 0x1202, 0x1200, 0, 0),			Slotter(2, 0), "Router 1 Router 2 End Device 2");
-		test_address(read_network_topology(obj, "Router 1 Router 1"),				Router(DeviceType::SECOND_ROUTER, 0x1100, 0x1000, 0, 1),		Slotter(4, 0, 0, 1), "Router 1 Router 1");
-		test_address(read_network_topology(obj, "Router 1 Router 1 End Device 1"),	Router(DeviceType::END_DEVICE, 0x1101, 0x1100, 0, 0),			Slotter(0, 0), "Router 1 Router 1 End Device 1");
-		test_address(read_network_topology(obj, "Router 1 End Device 2"),			Router(DeviceType::END_DEVICE, 0x1002, 0x1000, 0, 0),			Slotter(9, 0), "Router 1 End Device 2");
-		test_address(read_network_topology(obj, "Router 1 End Device 1"),			Router(DeviceType::END_DEVICE, 0x1001, 0x1000, 0, 0),			Slotter(8, 0), "Router 1 End Device 1");
-		test_address(read_network_topology(obj, "Router 1"),						Router(DeviceType::FIRST_ROUTER, 0x1000, ADDR_COORD, 2, 3),		Slotter(13, 0, 4, 7), "Router 1");
-		test_address(read_network_topology(obj, "End Device 1"),					Router(DeviceType::END_DEVICE, 0x0001, ADDR_COORD, 0, 0),		Slotter(23, 0), "End Device 1");
-		test_address(read_network_topology(obj, "BillyTheCoord"),					Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 3, 1),	Slotter(SLOT_NONE, 0, 13, 11), "Coordinator");
+		test_address(read_network_topology(obj, "Router 3 Router 1 End Device 1"),	Router(DeviceType::END_DEVICE, 0x3101, 0x3100, 0, 0),			Slotter(3, 24, 0), "Router 3 Router 1 End Device 1");
+		test_address(read_network_topology(obj, "Router 3 Router 1"),				Router(DeviceType::SECOND_ROUTER, 0x3100, 0x3000, 0, 1),		Slotter(12, 24, 0, 1, 3, 1), "Router 3 Router 1");
+		test_address(read_network_topology(obj, "Router 3"),						Router(DeviceType::FIRST_ROUTER, 0x3000, ADDR_COORD, 1, 0),		Slotter(22, 24, 0, 1, 12, 1), "Router 3");
+		test_address(read_network_topology(obj, "Router 2 End Device 1"),			Router(DeviceType::END_DEVICE, 0x2001, 0x2000, 0, 0),			Slotter(11, 24, 0), "Router 2 End Device 1");
+		test_address(read_network_topology(obj, "Router 2"),						Router(DeviceType::FIRST_ROUTER, 0x2000, ADDR_COORD, 0, 1),		Slotter(20, 24, 0, 2, 11, 1), "Router 2");
+		test_address(read_network_topology(obj, "Router 1 End Device 3"),			Router(DeviceType::END_DEVICE, 0x1003, 0x1000, 0, 0),			Slotter(10, 24, 0), "Router 1 End Device 3");
+		test_address(read_network_topology(obj, "Router 1 Router 2"),				Router(DeviceType::SECOND_ROUTER, 0x1200, 0x1000, 0, 2),		Slotter(5, 24, 0, 3, 1, 2), "Router 1 Router 2");
+		test_address(read_network_topology(obj, "Router 1 Router 2 End Device 1"),	Router(DeviceType::END_DEVICE, 0x1201, 0x1200, 0, 0),			Slotter(1, 24, 0), "Router 1 Router 2 End Device 1");
+		test_address(read_network_topology(obj, "Router 1 Router 2 End Device 2"),	Router(DeviceType::END_DEVICE, 0x1202, 0x1200, 0, 0),			Slotter(2, 24, 0), "Router 1 Router 2 End Device 2");
+		test_address(read_network_topology(obj, "Router 1 Router 1"),				Router(DeviceType::SECOND_ROUTER, 0x1100, 0x1000, 0, 1),		Slotter(4, 24, 0, 1, 0, 1), "Router 1 Router 1");
+		test_address(read_network_topology(obj, "Router 1 Router 1 End Device 1"),	Router(DeviceType::END_DEVICE, 0x1101, 0x1100, 0, 0),			Slotter(0, 24, 0), "Router 1 Router 1 End Device 1");
+		test_address(read_network_topology(obj, "Router 1 End Device 2"),			Router(DeviceType::END_DEVICE, 0x1002, 0x1000, 0, 0),			Slotter(9, 24, 0), "Router 1 End Device 2");
+		test_address(read_network_topology(obj, "Router 1 End Device 1"),			Router(DeviceType::END_DEVICE, 0x1001, 0x1000, 0, 0),			Slotter(8, 24, 0), "Router 1 End Device 1");
+		test_address(read_network_topology(obj, "Router 1"),						Router(DeviceType::FIRST_ROUTER, 0x1000, ADDR_COORD, 2, 3),		Slotter(13, 24, 0, 7, 4, 7), "Router 1");
+		test_address(read_network_topology(obj, "End Device 1"),					Router(DeviceType::END_DEVICE, 0x0001, ADDR_COORD, 0, 0),		Slotter(23, 24, 0), "End Device 1");
+		test_address(read_network_topology(obj, "BillyTheCoord"),					Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 3, 1),	Slotter(SLOT_NONE, 24, 0, 0, 13, 11), "Coordinator");
 
 		test_route(Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 10, 10), 0xA201, 0xA000, "Coordinator -> 0xA201");
 		test_route(Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 10, 10), 0x0005, 0x0005, "Coordinator -> 0x0005");
@@ -144,12 +146,14 @@ int main()
 	std::cout << "end testing JSON network parsing" << std::endl;
 
 	std::cout << "begin testing Loom Network operation" << std::endl;
-
 	{
 		using namespace LoomNet;
 		// intitialize a bunch of network objects and a map to simulate network packets
 		NetworkSim sim_net;
-		std::array<Network<16,16>, 13> devices{{
+		std::array<Network<16,16>, 16> devices{{
+			{ read_network_topology(obj, "Router 3 Router 1 End Device 1"), sim_net },
+			{ read_network_topology(obj, "Router 3 Router 1"), sim_net },
+			{ read_network_topology(obj, "Router 3"), sim_net },
 			{ read_network_topology(obj, "Router 2 End Device 1"), sim_net },
 			{ read_network_topology(obj, "Router 2"), sim_net },
 			{ read_network_topology(obj, "Router 1 End Device 3"), sim_net },
@@ -165,15 +169,16 @@ int main()
 			{ read_network_topology(obj, "BillyTheCoord"), sim_net }
 		}};
 		// prep the network simulator
-		std::array<uint8_t, 255> airwaves;
+		std::array<uint8_t, 255> airwaves{ 0 };
 		bool busy = false;
-		std::array<unsigned, 13> next_wake_times;
-		constexpr auto NET_ITER = 100;
+		std::array<unsigned, 16> next_wake_times{ 0 };
+		constexpr auto NET_ITER = 1000;
 		using NetStatus = Network<16, 16>::Status;
 		// every time any device writes to the network
 		sim_net.set_net_write([&airwaves, &busy](std::array<uint8_t, 255> packet) {
+			std::cout << "		Transmission from: 0x" << std::hex << std::setfill('0') << std::setw(4) << (static_cast<uint16_t>(packet[1]) | static_cast<uint16_t>(packet[2]) << 8) << std::endl;
 			if (busy) {
-				std::cout << "Collision!" << std::endl;
+				std::cout << "		Collision!" << std::endl;
 			}
 			// set the airwaves
 			airwaves = packet;
@@ -181,42 +186,53 @@ int main()
 		});
 		// every time any device reads from the network
 		sim_net.set_net_read([&airwaves, &busy]() {
-			if (busy) {
-				// not busy anymore! we read already
-				busy = false;
-				return airwaves;
-			}
-			return std::array<uint8_t, 255>();
+			// not busy anymore! we read already
+			busy = false;
+			return airwaves;
 		});
 		// iterate!
-		for (auto slot = 0; slot < NET_ITER; slot++) {
-			std::cout << "Slot: " << slot << std::endl;
+		for (uint16_t slot = 0; slot < NET_ITER; slot++) {
+			// clear the network
+			if (busy)
+				std::cout << "Unread network packet!";
+			airwaves.fill(0);
+			std::cout << "Slot: " << std::dec << slot << std::endl;
 			// wake all the devices that scheduled a wakeup now
 			std::cout << "	Woke: ";
-			for (auto o = 0; o < devices.size(); o++) {
+			for (uint8_t o = 0; o < devices.size(); o++) {
 				if (slot > next_wake_times[o]) {
+					next_wake_times[o]++;
 					devices[o].net_sleep_wake_ack();
-					std::cout << "0x" << std::hex << devices[o].get_router().get_self_addr() << ", ";
+					std::cout << "0x" << std::hex << std::setfill('0') << std::setw(4) << devices[o].get_router().get_self_addr() << ", ";
 				}
 			}
 			std::cout << std::endl;
 			// iterate through each element until all of them are asleep, then move to the next slot
-			bool run_again = false;
+			bool all_sleep;
+			auto iterations = 0;
 			do {
-				for (auto i = 0; i < devices.size(); i++) {
+				all_sleep = true;
+				std::cout << "	Iteration " << iterations << ":" << std::endl;
+				for (uint8_t i = 0; i < devices.size(); i++) {
+					// if the device is awake
 					const uint8_t status = devices[i].get_status();
 					if (status == NetStatus::NET_CLOSED)
 						std::cout << std::hex << devices[i].get_router().get_self_addr() << " closed!" << std::endl;
 					// sleep check
-					else if (status & NetStatus::NET_SLEEP_RDY) {
-						run_again = true;
-						next_wake_times[i] += devices[i].net_sleep_next_wake_time().time;
+					else if (!(status & NetStatus::NET_SLEEP_RDY)) {
+						// TODO: Send/Recvieve data!
+						// run the state machine
+						const uint8_t new_status = devices[i].net_update();
+						std::cout << "		Status of 0x" << std::hex << std::setfill('0') << std::setw(4) << devices[i].get_router().get_self_addr() << ": " << std::bitset<8>(devices[i].get_status()) << std::endl;
+						// if it wants to go to sleep now, add the time to the wake times
+						if (new_status & NetStatus::NET_SLEEP_RDY)
+							next_wake_times[i] += devices[i].net_sleep_next_wake_time().time;
+						else all_sleep = false;
 					}
-					// TODO: Send/Recvieve data!
-					// run the state machine
-					devices[i].net_update();
 				}
-			} while (!run_again);
+				iterations++;
+			} while (!all_sleep);
+			std::cout << "	Took " << iterations << " iterations." << std::endl;
 		}
 	}
 

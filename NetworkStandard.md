@@ -4,7 +4,7 @@ The following defines a specification for how the Loom peer network stack will b
 
 A key aspect of the Loom network design is the ability to power cycle the device and maintain network connectivity. This allows a device to hard power-down for extended periods of time, increasing battery life significantly.
 
-All numbers in this document are LSB-first.
+All numbers in this document are LSByte and LSBit.
 
 ## Components
 
@@ -127,7 +127,7 @@ A coordinator shall indicate the exact timings of refresh and data transactions 
 
 ### Refresh Transaction
 
-Periodically, a Coordinator shall trigger a refresh cycle by broadcasting a refresh packet, to be received by routers. This packet shall contain only the next wakeup times and intervals for the refresh and data periods. The routers and coordinator shall then rebroadcast this data to all of the nodes, in order of time slot priority. If a node does not receive a refresh signal, it assumes data from the last refresh signal received. If a node were to perform this action consecutively, the node instead assumes it has malfunctioned and continues listening for another refresh signal.
+Periodically, a Coordinator shall trigger a refresh cycle by broadcasting a refresh packet, to be received by routers. This packet shall contain only the next wakeup times and intervals for the refresh and data periods. The routers and coordinator shall then rebroadcast this data to all of the nodes, in reverse order of time slot priority. If a node does not receive a refresh signal, it assumes data from the last refresh signal received. If a node were to perform this action consecutively, the node instead assumes it has malfunctioned and continues listening for another refresh signal.
 
 If a coordinator would like to send additional routing data during a refresh period, it can do so using the count field of a refresh packet. The Coordinator may chose to repeat this transmission cycle with arbitrary data, signaling using the count field of the initial refresh packet. The initial refresh packet shall always contain synchronization data and shall be a brief packet (to ensure proper synchronization), however further packets may be any length and content. A refresh cycle is finished when a refresh packet is transmitted with count==0. Note that this data is unacknowledged, and that any misheard data is dropped---because of this characteristic, care shall be taken to ensure the state of the node shall not cause conflict should the node fail to receive a refresh.
 

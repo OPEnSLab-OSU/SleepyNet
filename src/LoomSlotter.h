@@ -12,30 +12,37 @@ namespace LoomNet {
 	class Slotter {
 	public:
 		enum class State {
-			SLOT_WAIT_PARENT,
-			SLOT_WAIT_CHILD,
+			SLOT_SEND,
+			SLOT_RECV,
 			SLOT_WAIT_REFRESH,
-			SLOT_WAIT_NEXT_DATA,
 			SLOT_ERROR
 		};
 
 		Slotter(	const uint8_t send_slot, 
-					const uint8_t cycles_per_refresh, 
+					const uint8_t total_slots,
+					const uint8_t cycles_per_refresh,
+					const uint8_t send_count,
 					const uint8_t recv_slot, 
 					const uint8_t recv_count)
 			: m_send_slot(send_slot)
+			, m_send_count(send_count)
 			, m_recv_slot(recv_slot)
 			, m_recv_count(recv_count)
+			, m_total_slots(total_slots)
 			, m_cycles_per_refresh(cycles_per_refresh)
 			, m_state(send_slot != SLOT_ERROR && recv_slot != SLOT_ERROR ? State::SLOT_WAIT_REFRESH : State::SLOT_ERROR)
-			, m_cur_cycle(0) {}
+			, m_cur_cycle(0)
+			, m_cur_device(0) {}
 		
-		Slotter(const uint8_t send_slot, const uint8_t cycles_per_refresh)
-			: Slotter(send_slot, cycles_per_refresh, SLOT_NONE, 0) {}
+		Slotter(const uint8_t send_slot, const uint8_t total_slots, const uint8_t cycles_per_refresh)
+			: Slotter(send_slot, total_slots, cycles_per_refresh, 1, SLOT_NONE, 0) {}
 
 		bool operator==(const Slotter& rhs) const {
 			return (rhs.m_send_slot == m_send_slot)
-				&& (rhs.m_recv_slot == m_recv_slot);
+				&& (rhs.m_send_count == m_send_count)
+				&& (rhs.m_recv_slot == m_recv_slot)
+				&& (rhs.m_recv_count == m_recv_count)
+				&& (rhs.m_total_slots == m_total_slots);
 		}
 
 		uint8_t get_send_slot() const { return m_send_slot; }
@@ -46,25 +53,46 @@ namespace LoomNet {
 			// if we were waiting for a refresh, we wait for children next
 			// if we don't have any children then parent
 			if (m_state == State::SLOT_ERROR) return m_state;
-			if (m_state == State::SLOT_WAIT_REFRESH) {
-				if (m_recv_slot == 0) return m_state = State::SLOT_WAIT_PARENT;
-				else return m_state = State::SLOT_WAIT_CHILD;
+			else if (m_state == State::SLOT_WAIT_REFRESH) {
+				if (m_recv_slot == SLOT_NONE) m_state = State::SLOT_SEND;
+				else m_state = State::SLOT_RECV;
+				m_cur_device = 0;
 			}
-			// else if we were waiting for a parent, start waiting for the child
-			else if (m_state == State::SLOT_WAIT_PARENT) return m_state = State::SLOT_WAIT_CHILD;
-			// else we were waiting on a child, so on to the next cycle!
-			else {
+			// else if we were waiting to recieve, start waiting  to send if we are out of children
+			else if (m_state == State::SLOT_RECV && ++m_cur_device == m_recv_count) {
+				if (m_send_slot != SLOT_NONE) m_state = State::SLOT_SEND;
+				m_cur_device = 0;
+			}				
+			// else we were waiting to transmit, so move to the next cycle
+			else if (m_state == State::SLOT_SEND && ++m_cur_device == m_send_count) {
 				if (++m_cur_cycle == m_cycles_per_refresh) {
 					m_cur_cycle = 0;
-					return m_state = State::SLOT_WAIT_REFRESH;
+					m_state = State::SLOT_WAIT_REFRESH;
 				}
-				else return m_state = State::SLOT_WAIT_NEXT_DATA;
+				else {
+					// or reset
+					if (m_recv_slot == SLOT_NONE) m_state = State::SLOT_SEND;
+					else m_state = State::SLOT_RECV;
+				}
+				m_cur_device = 0;
 			}
+			return m_state;
 		}
 
 		uint8_t get_slot_wait() const {
-			if (m_state == State::SLOT_WAIT_PARENT) return get_send_slot();
-			if (m_state == State::SLOT_WAIT_CHILD) return get_recv_slot();
+			if (m_state == State::SLOT_SEND && m_cur_device == 0) {
+				if (m_cur_cycle != 0 && m_recv_slot == SLOT_NONE)
+					return m_total_slots + SLOT_GAP - 1;
+				return m_recv_slot == SLOT_NONE ? get_send_slot() + SLOT_GAP : get_send_slot() - (get_recv_slot() + m_recv_count - 1) - 1;
+			}
+			if (m_state == State::SLOT_RECV && m_cur_device == 0)
+				if (m_cur_cycle != 0) {
+					if (m_send_slot != SLOT_NONE)
+						return m_total_slots + SLOT_GAP - (get_send_slot() + m_send_count - get_recv_slot());
+					else return m_total_slots + SLOT_GAP - m_recv_count - 1;
+				}
+				else return get_recv_slot() + SLOT_GAP;
+			// TODO: "next slot" timing
 			// else we're waiting for a time interval, so we have no slot data
 			else return 0;
 		}
@@ -72,16 +100,20 @@ namespace LoomNet {
 		void reset() {
 			m_state = State::SLOT_WAIT_REFRESH;
 			m_cur_cycle = 0;
+			m_cur_device = 0;
 		}
 
 	private:
 		const uint8_t m_send_slot;
+		const uint8_t m_send_count;
 		const uint8_t m_recv_slot;
 		const uint8_t m_recv_count;
+		const uint8_t m_total_slots;
 		const uint8_t m_cycles_per_refresh;
 		State m_state;
 		uint8_t m_cur_cycle;
+		uint8_t m_cur_device;
 	};
 
-	const Slotter SLOTTER_ERROR = Slotter(SLOT_ERROR, 0, SLOT_ERROR, 0);
+	const Slotter SLOTTER_ERROR = Slotter(SLOT_ERROR, 0, 0, 0, SLOT_ERROR, 0);
 }

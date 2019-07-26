@@ -17,10 +17,9 @@ namespace LoomNet {
 	public:
 		enum Status : uint8_t {
 			NET_SLEEP_RDY = 1,
-			NET_WAIT_REFRESH = (1 << 1),
-			NET_CLOSED = (1 << 2),
-			NET_RECV_RDY = (1 << 5),
-			NET_SEND_RDY = (1 << 6),
+			NET_CLOSED = (1 << 1),
+			NET_RECV_RDY = (1 << 4),
+			NET_SEND_RDY = (1 << 5)
 		};
 
 		enum class Error {
@@ -42,7 +41,7 @@ namespace LoomNet {
 			, m_buffer_send()
 			, m_buffer_recv()
 			, m_last_error(Error::NET_OK)
-			, m_status(Status::NET_WAIT_REFRESH) {}
+			, m_status(0) {}
 
 		bool operator==(const Network& rhs) const {
 			return (rhs.m_mac == m_mac)
@@ -64,12 +63,15 @@ namespace LoomNet {
 
 		uint8_t net_update() {
 			// if there's an error in the machine, we have to wait for it to be cleared
-			if (m_last_error != Error::NET_OK) return;
+			if (m_last_error != Error::NET_OK) return m_status;
 			const MAC::State mac_status = m_mac.get_status();
 			// loop until the MAC layer is ready to sleep, or we're wating on the network
 			// update our status with the status from the MAC layer
 			// if the mac is ready for data, check our circular buffers!
 			if (mac_status == MAC::State::MAC_DATA_WAIT) m_mac.check_for_data();
+			// if we're waiting for a refresh, update the MAC layer
+			else if (mac_status == MAC::State::MAC_REFRESH_WAIT) m_mac.check_for_refresh();
+			// else we have to do something to update the layer
 			else if (mac_status == MAC::State::MAC_DATA_SEND_RDY) {
 				if (m_buffer_send.size() > 0) {
 					// send the first packet corresponding to the address indicated by the MAC layer
@@ -97,7 +99,7 @@ namespace LoomNet {
 				else m_mac.send_pass();
 			}
 			// if the MAC layer failed to send, add the packet back to the buffer for later
-			else if (mac_status == MAC::State::MAC_SEND_FAIL) {
+			else if (mac_status == MAC::State::MAC_DATA_SEND_FAIL) {
 				// TODO: figure out some better way of handling errors
 				if (!m_buffer_send.emplace_back(m_mac.get_staged_packet()))
 					return m_halt_error(Error::SEND_BUF_FULL);
@@ -119,15 +121,14 @@ namespace LoomNet {
 					if (nexthop == ADDR_ERROR || nexthop == ADDR_NONE)
 						return m_halt_error(Error::ROUTE_FAIL);
 					// set the next hop address and src
-					recv_frag.set_src(m_router.get_self_addr);
+					recv_frag.set_src(m_router.get_self_addr());
 					recv_frag.set_next_hop(nexthop);
 					// push the packet to the send buffer, tagging it with the next hop address
 					if (!m_buffer_send.emplace_back(recv_frag))
 						return m_halt_error(Error::SEND_BUF_FULL);
 				}
 			}
-			// if we're waiting for a refresh, update the MAC layer
-			else if (mac_status == MAC::State::MAC_WAIT_REFRESH) m_mac.check_for_refresh();
+			// throw an error if the MAC state is out of bounds
 			else if (mac_status != MAC::State::MAC_SLEEP_RDY) 
 				return m_halt_error(Error::INVAL_MAC_STATE);
 			// update and return status
@@ -175,7 +176,7 @@ namespace LoomNet {
 			m_buffer_send.reset();
 			// reset state and error
 			m_last_error = Error::NET_OK;
-			m_status = Status::NET_WAIT_REFRESH;
+			m_status = 0;
 		}
 
 		Error get_last_error() const { return m_last_error; }
@@ -191,16 +192,10 @@ namespace LoomNet {
 
 		void m_update_state(const MAC::State mac_status) {
 			// update the state and set the sleep and wake bit
-			if (mac_status == MAC::State::MAC_WAIT_REFRESH) {
-				m_status |= Status::NET_WAIT_REFRESH;
-				m_status &= ~Status::NET_SLEEP_RDY;
-			}
-			else if (mac_status == MAC::State::MAC_SLEEP_RDY) {
+			if (mac_status == MAC::State::MAC_SLEEP_RDY)
 				m_status |= Status::NET_SLEEP_RDY;
-				m_status &= ~Status::NET_WAIT_REFRESH;
-			}
-			else if (mac_status == MAC::State::MAC_CLOSED) 
-				m_halt_error(Error::INVAL_MAC_STATE);
+			else 
+				m_status &= ~Status::NET_SLEEP_RDY;
 		}
 
 		MAC m_mac;

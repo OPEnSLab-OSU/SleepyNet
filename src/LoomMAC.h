@@ -21,8 +21,8 @@ namespace LoomNet {
 			MAC_DATA_SEND_RDY,
 			MAC_DATA_WAIT,
 			MAC_DATA_RECV_RDY,
-			MAC_SEND_FAIL,
-			MAC_WAIT_REFRESH,
+			MAC_DATA_SEND_FAIL,
+			MAC_REFRESH_WAIT,
 			MAC_CLOSED
 		};
 
@@ -44,12 +44,13 @@ namespace LoomNet {
 				const Slotter& slot, 
 				const NetworkSim& network)
 			: m_slot(slot)
-			, m_state(State::MAC_WAIT_REFRESH)
+			, m_state(State::MAC_REFRESH_WAIT)
 			, m_send_type(SendType::NONE)
 			, m_last_error(Error::MAC_OK)
 			, m_cur_send_addr(ADDR_NONE)
 			, m_slot_idle(0)
-			, m_staging{}
+			, m_staging{0}
+			, m_staged(false)
 			, m_network(network)
 			, m_self_addr(self_addr)
 			, m_self_type(self_type) {}
@@ -64,8 +65,12 @@ namespace LoomNet {
 		Error get_last_error() const { return m_last_error; }
 
 		void reset() {
-			m_state = State::MAC_WAIT_REFRESH;
+			m_state = State::MAC_REFRESH_WAIT;
 			m_last_error = Error::MAC_OK;
+			m_staged = false;
+			m_staging.fill(0);
+			m_slot_idle = 0;
+			m_cur_send_addr = ADDR_NONE;
 			m_slot.reset();
 		}
 
@@ -74,12 +79,13 @@ namespace LoomNet {
 			// in the meantime, we assume that the timing is always correct
 			// update our state
 			const Slotter::State cur_state = m_slot.get_state();
-			if (cur_state == Slotter::State::SLOT_WAIT_REFRESH) m_state = State::MAC_WAIT_REFRESH;
-			else if (cur_state == Slotter::State::SLOT_WAIT_PARENT) {
+			if (cur_state == Slotter::State::SLOT_WAIT_REFRESH) 
+				m_state = State::MAC_REFRESH_WAIT;
+			else if (cur_state == Slotter::State::SLOT_SEND) {
 				m_state = State::MAC_DATA_SEND_RDY;
 				m_send_type = SendType::MAC_DATA;
 			}
-			else if (cur_state == Slotter::State::SLOT_WAIT_CHILD) {
+			else if (cur_state == Slotter::State::SLOT_RECV) {
 				m_state = State::MAC_DATA_WAIT;
 				m_send_type = SendType::MAC_ACK_WITH_DATA;
 			}
@@ -94,8 +100,8 @@ namespace LoomNet {
 		// we do one slot for debugging purposes
 		TimeInterval sleep_next_wake_time() const {
 			const Slotter::State state = m_slot.get_state();
-			if (state == Slotter::State::SLOT_WAIT_REFRESH || state == Slotter::State::SLOT_WAIT_NEXT_DATA)
-				return { TimeInterval::Unit::SECOND, 1 };
+			if (state == Slotter::State::SLOT_WAIT_REFRESH)
+				return { TimeInterval::Unit::SECOND, SLOT_GAP };
 			else
 				return { TimeInterval::Unit::SECOND, m_slot.get_slot_wait() };
 		}
@@ -103,7 +109,7 @@ namespace LoomNet {
 		uint16_t get_cur_send_address() const { return m_cur_send_addr; }
 
 		bool send_fragment(DataFragment frag) {
-			if (m_state == State::MAC_DATA_SEND_RDY) {
+			if (m_state == State::MAC_DATA_SEND_RDY && !m_staged) {
 				if (frag.get_next_hop() != m_cur_send_addr) return false;
 				// set the ACK bit if needed
 				if (m_send_type == SendType::MAC_ACK_WITH_DATA)
@@ -112,8 +118,9 @@ namespace LoomNet {
 				frag.calc_framecheck(frag.get_fragment_length() - 2);
 
 				// write to the "network"
-				for (auto i = 0; i < m_staging.size(); i++) m_staging[i] = frag[i];
+				for (uint8_t i = 0; i < m_staging.size(); i++) m_staging[i] = frag[i];
 				m_network.net_write(m_staging);
+				m_staged = true;
 				// change the state!
 				if (m_send_type == SendType::MAC_DATA) {
 					m_state = State::MAC_DATA_WAIT;
@@ -133,20 +140,26 @@ namespace LoomNet {
 		}
 
 		DataFragment get_staged_packet() {
-			if (m_state == State::MAC_DATA_RECV_RDY) {
-				// next state!
-				if (m_send_type == SendType::MAC_ACK_WITH_DATA)
-					m_state = State::MAC_DATA_SEND_RDY;
-				else
+			if (m_staged) {
+				if (m_state == State::MAC_DATA_RECV_RDY) {
+					// next state!
+					if (m_send_type == SendType::MAC_ACK_WITH_DATA)
+						m_state = State::MAC_DATA_SEND_RDY;
+					else {
+						m_state = State::MAC_SLEEP_RDY;
+						m_send_type = SendType::NONE;
+					}
+				}
+				else if (m_state == State::MAC_DATA_SEND_FAIL) {
+					// next state!
 					m_state = State::MAC_SLEEP_RDY;
+					m_send_type = SendType::NONE;
+				}
+				// get the packet
+				m_staged = false;
+				return { m_staging.data(), static_cast<uint8_t>(m_staging.size()) };
 			}
-			else if (m_state == State::MAC_SEND_FAIL) {
-				// next state!
-				m_state = State::MAC_SLEEP_RDY;
-			}
-			else return { ADDR_ERROR, ADDR_ERROR, ADDR_ERROR, 0, nullptr, 0, ADDR_ERROR };
-			// get the packet
-			return { m_staging.data(), m_staging.size() };
+			return { ADDR_ERROR, ADDR_ERROR, ADDR_ERROR, 0, nullptr, 0, ADDR_ERROR };
 		}
 
 		void send_pass() {
@@ -154,10 +167,7 @@ namespace LoomNet {
 				// check if we need to send an ACK
 				if (m_send_type == SendType::MAC_ACK_WITH_DATA) {
 					// send a regular ACK instead of a fancy one
-					const ACKFragment frag(m_self_addr);
-					std::array<uint8_t, 255> temp;
-					for (auto i = 0; i < temp.size(); i++) temp[i] = frag[i];
-					m_network.net_write(temp);
+					m_send_ack();
 				}
 				// set the state to sleep
 				m_state = State::MAC_SLEEP_RDY;
@@ -174,29 +184,27 @@ namespace LoomNet {
 					// if the framecheck fails to verify, ignore the packet
 					if (!check_packet(recv, m_cur_send_addr)) {
 						// TODO: Add a "failed count" here
+						m_send_type = SendType::NONE;
 						return m_state = State::MAC_SLEEP_RDY;
 					}
 					// check to see if it's the right kind of packet
 					const PacketCtrl& ctrl = get_packet_control(recv);
 					if (ctrl == PacketCtrl::DATA_TRANS && m_send_type == SendType::MAC_ACK_WITH_DATA) {
 						// first stage packet, recieve it then signal we're ready to send
-						return m_state = State::MAC_DATA_RECV_RDY;
+						m_state = State::MAC_DATA_RECV_RDY;
 					}
 					else if (ctrl == PacketCtrl::DATA_ACK_W_DATA && m_send_type == SendType::MAC_ACK_NO_DATA) {
 						// second stage packet with data, send an ACK and tell the device
 						// can recieve
-						const ACKFragment frag(m_self_addr);
-						std::array<uint8_t, 255> temp;
-						for (auto i = 0; i < temp.size(); i++) temp[i] = frag[i];
-						m_network.net_write(temp);
+						m_send_ack();
 						// ready for next reply
 						m_send_type = SendType::NONE;
-						return m_state = State::MAC_DATA_RECV_RDY;
+						m_state = State::MAC_DATA_RECV_RDY;
 					}
 					else if (ctrl == PacketCtrl::DATA_ACK 
 						&& (m_send_type == SendType::MAC_ACK_NO_DATA || m_send_type == SendType::NONE)) {
 						
-						// got an ACK! Guess we're all done.
+						// got an ACK! Guess we're finished with this transaction
 						m_state = State::MAC_SLEEP_RDY;
 						m_send_type = SendType::NONE;
 					}
@@ -211,25 +219,58 @@ namespace LoomNet {
 						// I suppose you have nothing to say for yourself
 						// very well
 						m_slot_idle = 0;
-						return m_state = State::MAC_SEND_FAIL;
+						if (m_staged) m_state = State::MAC_DATA_SEND_FAIL;
+						else m_state = State::MAC_SLEEP_RDY;
 					}
 				}
 			}
+			return m_state;
 		}
 
-		bool check_for_refresh() {
+		void check_for_refresh() {
 			// if we're a router or end device, just check and see if anyone has transmitted a signal
 			if (m_self_type != DeviceType::COORDINATOR) {
-
+				// check our "network"
+				const std::array<uint8_t, 255> & recv = m_network.net_read();
+				if (recv[0]) {
+					// guess we got a refresh packet!
+					// ignore everything in it for now, we'll deal with timing stuff later
+					// TODO: timing stuff
+					// Additionally, we are supposed to do retransmission here, but I
+					// have to ignore that for now
+					// TODO: Retransmission
+					if (get_packet_control(recv) == PacketCtrl::REFRESH_INITIAL
+						&& check_packet(recv, m_self_addr)) {
+						m_state = State::MAC_SLEEP_RDY;
+						m_slot.next_state();
+					}
+				}
 			}
 			// else we're a coordinator and we need to do the refresh ourselves
-			// TODO: timing stuff here?
 			else {
+				// write to the network
+				const RefreshFragment frag(m_self_addr,
+					{ TimeInterval::Unit::SECOND, SLOT_GAP },
+					{ TimeInterval::Unit::SECOND, SLOT_GAP },
+					0 );
+				std::array<uint8_t, 255> temp;
+				for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag[i];
+				m_network.net_write(temp);
+				// next state!
+				m_state = State::MAC_SLEEP_RDY;
+				m_slot.next_state();
 			}
-			return false;
 		}
 
 	private:
+
+		void m_send_ack() {
+			// send a regular ACK packet
+			const ACKFragment frag(m_self_addr);
+			std::array<uint8_t, 255> temp;
+			for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag[i];
+			m_network.net_write(temp);
+		}
 
 		Slotter m_slot;
 		State m_state;
@@ -238,6 +279,7 @@ namespace LoomNet {
 		uint16_t m_cur_send_addr;
 		uint8_t m_slot_idle;
 		std::array<uint8_t, 255> m_staging;
+		bool m_staged;
 		const uint16_t m_self_addr;
 		const DeviceType m_self_type;
 		// variables used for simulation

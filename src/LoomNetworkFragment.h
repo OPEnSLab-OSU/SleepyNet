@@ -62,7 +62,7 @@ namespace LoomNet {
 		}
 
 		// get the buffer
-		uint8_t operator[](const uint8_t index) const { m_payload[index]; }
+		uint8_t operator[](const uint8_t index) const { return m_payload[index]; }
 		const uint8_t* get_raw() const { return m_payload; }
 		// get the section that we're allowed to write to
 		uint8_t* get_write_start() { return &(m_payload[3]); }
@@ -129,7 +129,7 @@ namespace LoomNet {
 		const uint8_t* get_payload() const { return &(get_write_start()[5]); }
 		uint8_t get_payload_length() const { const uint8_t num = get_write_start()[5]; return num >= 6 ? num - 6 : 0; }
 		uint8_t get_fragment_length() const { return get_payload_length() + 5; }
-		void set_next_hop(const uint8_t next_hop) { m_next_hop_addr = next_hop; }
+		void set_next_hop(const uint16_t next_hop) { m_next_hop_addr = next_hop; }
 		uint16_t get_next_hop() const { return m_next_hop_addr; }
 		void set_is_ack(bool is_ack) { is_ack ? set_control(PacketCtrl::DATA_ACK_W_DATA) : set_control(PacketCtrl::DATA_TRANS); }
 
@@ -153,6 +153,7 @@ namespace LoomNet {
 				packet[3] = static_cast<uint8_t>(refresh_interval.time >> 8);
 				packet[4] = 0;
 				packet[5] = count;
+				calc_framecheck(9);
 			}
 		}
 
@@ -164,6 +165,7 @@ namespace LoomNet {
 			);
 		}
 		uint8_t get_count() const { return get_write_start()[5]; }
+		uint8_t get_fragment_length() const { return 11; }
 	};
 
 	class ACKFragment : public Fragment {

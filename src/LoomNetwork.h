@@ -67,12 +67,9 @@ namespace LoomNet {
 			if (m_last_error != Error::NET_OK) return;
 			const MAC::State mac_status = m_mac.get_status();
 			// loop until the MAC layer is ready to sleep, or we're wating on the network
-			// if the MAC closed, error and return
-			if (mac_status == MAC::State::MAC_CLOSED)
-				return m_halt_error(Error::MAC_FAIL);
 			// update our status with the status from the MAC layer
 			// if the mac is ready for data, check our circular buffers!
-			else if (mac_status == MAC::State::MAC_DATA_WAIT) m_mac.check_for_data();
+			if (mac_status == MAC::State::MAC_DATA_WAIT) m_mac.check_for_data();
 			else if (mac_status == MAC::State::MAC_DATA_SEND_RDY) {
 				if (m_buffer_send.size() > 0) {
 					// send the first packet corresponding to the address indicated by the MAC layer
@@ -99,10 +96,16 @@ namespace LoomNet {
 				// else tell the mac layer we got nothing
 				else m_mac.send_pass();
 			}
+			// if the MAC layer failed to send, add the packet back to the buffer for later
+			else if (mac_status == MAC::State::MAC_SEND_FAIL) {
+				// TODO: figure out some better way of handling errors
+				if (!m_buffer_send.emplace_back(m_mac.get_staged_packet()))
+					return m_halt_error(Error::SEND_BUF_FULL);
+			}
 			// if the mac has data ready to be copied, do that
 			else if (mac_status == MAC::State::MAC_DATA_RECV_RDY) {
 				// create a lookahead copy of the fragment
-				DataFragment recv_frag = m_mac.get_recv_fragment();
+				DataFragment recv_frag = m_mac.get_staged_packet();
 				// if we have a fragment that is addressed to us, add it to the recv buffer
 				if (recv_frag.get_dst() == m_addr) {
 					if (!m_buffer_recv.emplace_back(recv_frag))
@@ -125,6 +128,8 @@ namespace LoomNet {
 			}
 			// if we're waiting for a refresh, update the MAC layer
 			else if (mac_status == MAC::State::MAC_WAIT_REFRESH) m_mac.check_for_refresh();
+			else if (mac_status != MAC::State::MAC_SLEEP_RDY) 
+				return m_halt_error(Error::INVAL_MAC_STATE);
 			// update and return status
 			m_update_state(mac_status);
 			return m_status;
@@ -134,7 +139,7 @@ namespace LoomNet {
 			// push the send fragment into the buffer
 			m_buffer_send.emplace_back(send);
 			// if the send buffer is full, disallow further sending
-			if (m_buffer_send.full()) m_status &= ~Status::NET_SEND_RDY;
+			if (m_buffer_send.size() - 1 == m_buffer_send.allocated()) m_status &= ~Status::NET_SEND_RDY;
 		}
 
 		void app_send(const uint16_t dst_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length) {

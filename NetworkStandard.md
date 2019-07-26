@@ -201,8 +201,6 @@ In addition to it's transmission period, a router shall remain listening to the 
 The number of data transactions per refresh cycle shall be provided in the device configuration, in addition to a data transaction interval in milliseconds. Data transactions shall happen consecutively every interval until the limit has been reached or the next refresh transaction, and then shall idle or sleep if the transactions are finished early.
 #### Packet Format
 
-Information sent during a Data transaction shall be formatted as follows:
-
 | Three-Bit Code | Packet Type |
 | --- | --- |
 | 100 | Initial Refresh/Sync Data |
@@ -213,11 +211,13 @@ Information sent during a Data transaction shall be formatted as follows:
 | 111 | Data ACK w/ Transmission |
 | 010 | Reserved |
 
+The *Data transmission* and *ACK with Data* packets shall be formatted as follows:
 ```
 +---------+---------+----------------+---------+
 | Control | Source  | Network Packet | FCS     |
 | 8 Bits  | 16 Bits | 56-250 Bytes   | 16 Bits |
 +---------+---------+----------------+---------+
+Where:
 ```
 * **Control**
   * Bits 0-2: Packet type, shown in table above.
@@ -226,6 +226,20 @@ Information sent during a Data transaction shall be formatted as follows:
 * **Source** The address of the device that sent this packet. Not to be confused with the original source, which is ignored by the MAC layer.
 * **Network Packet** See the network packet structure.
 * **FCS** A verification mechanism calculated using a 16-bit CRC with the polynomial `x^16+x^12+x^5+1`. The calculation of this value shall include the entire packet structure, excluding the checksum itself.
+
+The *ACK* packet shall be formatted as follows:
+```
++---------+---------+
+| Control | Source  |
+| 8 Bits  | 16 Bits |
++---------+---------+
+```
+* **Control**
+  * Bits 0-2: Packet type, shown in table above.
+  * Bits 3-4: Protocol version, as of this draft 0.
+  * Bits 4-5: Reserved.
+* **Source** The address of the device that sent this packet. Not to be confused with the original source, which is ignored by the MAC layer.
+
 
 ## Radio (Needs Revising)
 

@@ -17,6 +17,10 @@ namespace LoomNet {
 	constexpr auto PROTOCOL_VER = 0;
 	constexpr auto MAX_DEVICES = 255;
 	constexpr auto CYCLES_PER_REFRESH = 5;
+	
+	// debug stuff for simulation
+	// TODO: replace this stuff with real numbers
+	constexpr auto LOOPS_PER_SLOT = 10;
 
 	enum PacketCtrl : uint8_t {
 		REFRESH_INITIAL		= 0b100 | (PROTOCOL_VER << 2),

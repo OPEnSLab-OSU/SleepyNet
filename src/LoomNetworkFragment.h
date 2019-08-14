@@ -147,10 +147,10 @@ namespace LoomNet {
 			if (6 > pkt_count) set_error();
 			else {
 				// copy our data into the payload
-				packet[0] = (data_interval.unit & 0x07) | ((refresh_interval.unit & 0x07) << 3);
-				packet[1] = static_cast<uint8_t>(data_interval.time & 0xFF);
-				packet[2] = static_cast<uint8_t>(refresh_interval.time & 0xFF);
-				packet[3] = static_cast<uint8_t>(refresh_interval.time >> 8);
+				packet[0] = (data_interval.get_unit() & 0x07) | ((refresh_interval.get_unit() & 0x07) << 3);
+				packet[1] = static_cast<uint8_t>(data_interval.get_time() & 0xFF);
+				packet[2] = static_cast<uint8_t>(refresh_interval.get_time() & 0xFF);
+				packet[3] = static_cast<uint8_t>(refresh_interval.get_time() >> 8);
 				packet[4] = 0;
 				packet[5] = count;
 				calc_framecheck(9);

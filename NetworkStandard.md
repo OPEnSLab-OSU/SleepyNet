@@ -121,9 +121,24 @@ Use modified TMAC shown [here](http://www.cs.umd.edu/~moustafa/papers/IMPACCT200
 
 ![State Diagram For a End Device or Router](images/state.png)
 
-The Loom MAC will operate in three states: Power Off/Sleep, Refresh Transaction, and Data Transaction. A refresh transaction shall synchronize a node to the network, and a data transaction shall facilitate sending data between two devices. Both these events and shall happen periodically at pre-programmed rates, and shall not overlap. It is recommended to have a refresh transaction after a fixed number of data transactions.
+The Loom MAC will operate in three states: Power Off/Sleep, Refresh Transaction, and Data Transaction. A refresh transaction shall synchronize a node to the network, and a data transaction shall facilitate sending data between two devices. A single refresh or data transaction may be referred to as a *cycle*. A set of cycles with a single refresh transaction in front followed by consecutive data transactions shall be referred to as a *batch*. A batch shall follow timings as specified:
+```
++---------------------+-------------+------------------+-----------+------------------+-----
+| Refresh Transaction | Data Timing | Data Transaction | Cycle Gap | Data Transaction | 
+| 5 Slots             |             | n Slots          | k Slots   | n Slots          |
++---------------------+-------------+------------------+-----------+------------------+-----
+```
+where: 
+* **Refresh Transaction** shall happen at the beginning of every batch. If this is the first batch since power on, the coordinator may start this at any time. Otherwise the coordinator must follow the timings transmitted in [previous refresh transactions](#packet-format). 
+* **Data Timing** shall happen immediately after the refresh transaction. The length of this section shall be defined in the [previous refresh transactions](#packet-format).
+* **Data Transaction** shall happen once for each cycle in this batch, minus the initial refresh cycle. The length of this cycle shall be the number of slots required by the network topology.
+* **Cycle Gap** shall be a delay between consecutive data transaction cycles. The length of this delay shall be preconfigured, and must use time slots as units.
 
-A coordinator shall indicate the exact timings of refresh and data transactions during a refresh transaction, and a router shall relay this information if needed. If a device is neither in a refresh transaction or data transaction, the device is permitted to sleep until the next transaction. If the device has not received a refresh transaction from a coordinator or router (i.e. the device is new to the network) the device shall listen to the network until it receives a valid refresh transaction (indicated with "wait for refresh transaction" on the state diagram).
+The length of time for an individual slot, the slots per cycle gap, and the number of slots per data transaction shall be preconfigured to the device. During network operation, a coordinator shall indicate the exact timings of refresh and data transactions during a refresh transaction, and a router shall relay this information during additional slots in the refresh transaction.
+
+If a device is neither in a refresh transaction or data transaction, the device is permitted to sleep until the next transaction. If the device has not received a refresh transaction from a coordinator or router (i.e. the device is new to the network) the device shall listen to the network until it receives a valid refresh transaction (indicated with "wait for refresh transaction" on the state diagram).
+
+In addition to it's transmission period, a router shall remain listening to the network during its end devices' time slots. A coordinator shall be awake at all times.
 
 ### Refresh Transaction
 
@@ -195,10 +210,6 @@ A device, upon entering it's designated time slot, can transmit data to an upstr
 * **Data Transmission**: The device sends it's payload using the *Data Transmission* packet format. The device then turns on the receiver to wait for a response.
 * **ACK/Reverse Data Transmission** The receiving router/coordinator sends an acknowledgement using the *ACK* format, or alternatively the *ACK with Data* packet format if upstream data is available for the device. If the router/coordinator sent upstream data to the device, the router/coordinator turns on it's receiver and waits for a response.
 * **ACK** If the device received upstream data, it send back a final *ACK* to the router/coordinator, and resumes sleep.
-
-In addition to it's transmission period, a router shall remain listening to the network during its end devices' time slots. A coordinator shall be awake at all times.
-
-The number of data transactions per refresh cycle shall be provided in the device configuration, in addition to a data transaction interval in milliseconds. Data transactions shall happen consecutively every interval until the limit has been reached or the next refresh transaction, and then shall idle or sleep if the transactions are finished early.
 #### Packet Format
 
 | Three-Bit Code | Packet Type |

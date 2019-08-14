@@ -51,6 +51,8 @@ namespace LoomNet {
 			, m_slot_idle(0)
 			, m_staging{0}
 			, m_staged(false)
+			, m_next_refresh_cycle(TimeInterval::NONE, 0)
+			, m_next_data_cycle(TimeInterval::NONE, 0)
 			, m_network(network)
 			, m_self_addr(self_addr)
 			, m_self_type(self_type) {}
@@ -69,6 +71,8 @@ namespace LoomNet {
 			m_last_error = Error::MAC_OK;
 			m_staged = false;
 			m_staging.fill(0);
+			m_next_refresh_cycle = TimeInterval(TimeInterval::NONE, 0);
+			m_next_data_cycle = TimeInterval(TimeInterval::NONE, 0);
 			m_slot_idle = 0;
 			m_cur_send_addr = ADDR_NONE;
 			m_slot.reset();
@@ -101,7 +105,7 @@ namespace LoomNet {
 		TimeInterval sleep_next_wake_time() const {
 			const Slotter::State state = m_slot.get_state();
 			if (state == Slotter::State::SLOT_WAIT_REFRESH)
-				return { TimeInterval::Unit::SECOND, SLOT_GAP };
+				return { TimeInterval::Unit::SECOND, BATCH_GAP };
 			else
 				return { TimeInterval::Unit::SECOND, m_slot.get_slot_wait() };
 		}
@@ -241,6 +245,8 @@ namespace LoomNet {
 					// TODO: Retransmission
 					if (get_packet_control(recv) == PacketCtrl::REFRESH_INITIAL
 						&& check_packet(recv, m_self_addr)) {
+						// TODO: Do things based off of m_next_data_cycle
+						m_next_data_cycle = 
 						m_state = State::MAC_SLEEP_RDY;
 						m_slot.next_state();
 					}
@@ -249,9 +255,10 @@ namespace LoomNet {
 			// else we're a coordinator and we need to do the refresh ourselves
 			else {
 				// write to the network
+				// TODO: exact timings
 				const RefreshFragment frag(m_self_addr,
-					{ TimeInterval::Unit::SECOND, SLOT_GAP },
-					{ TimeInterval::Unit::SECOND, SLOT_GAP },
+					{ TimeInterval::Unit::SECOND, BATCH_GAP },
+					{ TimeInterval::Unit::SECOND, BATCH_GAP + REFRESH_CYCLE_SLOTS },
 					0 );
 				std::array<uint8_t, 255> temp;
 				for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag[i];
@@ -280,6 +287,8 @@ namespace LoomNet {
 		uint8_t m_slot_idle;
 		std::array<uint8_t, 255> m_staging;
 		bool m_staged;
+		TimeInterval m_next_refresh_cycle;
+		TimeInterval m_next_data_cycle;
 		const uint16_t m_self_addr;
 		const DeviceType m_self_type;
 		// variables used for simulation

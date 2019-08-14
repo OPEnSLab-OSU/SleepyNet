@@ -226,7 +226,7 @@ int main()
 						std::cout << "		Status of 0x" << std::hex << std::setfill('0') << std::setw(4) << devices[i].get_router().get_self_addr() << ": " << std::bitset<8>(devices[i].get_status()) << std::endl;
 						// if it wants to go to sleep now, add the time to the wake times
 						if (new_status & NetStatus::NET_SLEEP_RDY)
-							next_wake_times[i] += devices[i].net_sleep_next_wake_time().time;
+							next_wake_times[i] += devices[i].net_sleep_next_wake_time().get_time();
 						else all_sleep = false;
 					}
 				}

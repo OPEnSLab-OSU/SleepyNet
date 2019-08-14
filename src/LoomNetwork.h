@@ -41,7 +41,7 @@ namespace LoomNet {
 			, m_buffer_send()
 			, m_buffer_recv()
 			, m_last_error(Error::NET_OK)
-			, m_status(0) {}
+			, m_status(Status::NET_SEND_RDY) {}
 
 		bool operator==(const Network& rhs) const {
 			return (rhs.m_mac == m_mac)

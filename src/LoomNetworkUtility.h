@@ -17,7 +17,6 @@ namespace LoomNet {
 	constexpr auto PROTOCOL_VER = 0;
 	constexpr auto MAX_DEVICES = 255;
 	constexpr uint8_t REFRESH_CYCLE_SLOTS = 5;
-	const TimeInterval TIME_NONE(TimeInterval::NONE, 0);
 
 	enum PacketCtrl : uint8_t {
 		REFRESH_INITIAL = 0b100 | (PROTOCOL_VER << 2),
@@ -55,10 +54,19 @@ namespace LoomNet {
 		TimeInterval(const uint8_t unit, const uint32_t time)
 			: TimeInterval(static_cast<Unit>(unit), time) {}
 
+		TimeInterval(const TimeInterval&) = default;
+		TimeInterval(TimeInterval&&) = default;
+		TimeInterval& operator=(TimeInterval&&) = default;
+		TimeInterval& operator=(const TimeInterval&) = default;
+
 		const TimeInterval operator+(const TimeInterval& rhs) const {
-			if (m_unit > rhs.m_unit) return { rhs.m_unit, m_match_unit(rhs, *this) + rhs.m_time };
-			else if (m_unit < rhs.m_unit) return { m_unit, m_match_unit(*this, rhs) + m_time };
-			else return { m_unit, rhs.m_time + m_time };
+			const std::array<TimeInterval, 2> & times = m_match_time(rhs);
+			return { times[0].get_unit(), times[0].get_time() + times[1].get_time() };
+		}
+
+		const TimeInterval operator-(const TimeInterval& rhs) const {
+			const std::array<TimeInterval, 2> & times = m_match_time(rhs);
+			return { times[0].get_unit(), times[0].get_time() - times[1].get_time() };
 		}
 
 		const TimeInterval operator*(const uint32_t num) const { return { m_unit, m_time * num }; }
@@ -67,21 +75,51 @@ namespace LoomNet {
 		const TimeInterval operator*(const int32_t num) const { return { m_unit, m_time * num }; }
 
 		bool operator==(const TimeInterval& rhs) const {
-			if (m_unit > rhs.m_unit) return m_match_unit(rhs, *this) == rhs.m_time;
-			else if (m_unit < rhs.m_unit) return m_match_unit(*this, rhs) == m_time;
-			else return rhs.m_time == m_time;
+			const std::array<TimeInterval, 2> & times = m_match_time(rhs);
+			if (times[0].get_unit() == Unit::NONE) return false;
+			return times[0].get_time() == times[1].get_time();
 		}
 
 		bool operator!=(const TimeInterval& rhs) const { return !(*this == rhs); }
+
+		bool operator<(const TimeInterval& rhs) const {
+			const std::array<TimeInterval, 2> & times = m_match_time(rhs);
+			if (times[0].get_unit() == Unit::NONE) return false;
+			return times[0].get_time() < times[1].get_time();
+		}
+
+		bool operator>(const TimeInterval& rhs) const {
+			const std::array<TimeInterval, 2> & times = m_match_time(rhs);
+			if (times[0].get_unit() == Unit::NONE) return false;
+			return times[0].get_time() > times[1].get_time();
+		}
+
+		bool operator<=(const TimeInterval& rhs) const {
+			const std::array<TimeInterval, 2> & times = m_match_time(rhs);
+			if (times[0].get_unit() == Unit::NONE) return false;
+			return times[0].get_time() <= times[1].get_time();
+		}
+
+		bool operator>=(const TimeInterval& rhs) const {
+			const std::array<TimeInterval, 2> & times = m_match_time(rhs);
+			if (times[0].get_unit() == Unit::NONE) return false;
+			return times[0].get_time() >= times[1].get_time();
+		}
 
 		const Unit get_unit() const { return m_unit; }
 		const uint32_t get_time() const { return m_time; }
 
 	private:
-		uint32_t m_match_unit(const TimeInterval& smaller_unit, const TimeInterval& larger_unit) const {
+		std::array<TimeInterval, 2> m_match_time(const TimeInterval & rhs) const {
 			// error check
-			if (smaller_unit.get_unit() == Unit::NONE || larger_unit.get_unit() == Unit::NONE) 
-				return larger_unit.get_time();
+			if (get_unit() == Unit::NONE || rhs.get_unit() == Unit::NONE)
+				return { TimeInterval(Unit::NONE, 0), TimeInterval(Unit::NONE, 0) };
+			if (m_unit > rhs.m_unit) return { m_match_unit(rhs, *this),  rhs };
+			else if (m_unit < rhs.m_unit) return { *this,  m_match_unit(*this, rhs) };
+			else return { *this, rhs };
+		}
+
+		TimeInterval m_match_unit(const TimeInterval& smaller_unit, const TimeInterval& larger_unit) const {
 			uint8_t unit_index = larger_unit.m_unit;
 			uint32_t time_index = larger_unit.m_time;
 			while (unit_index != smaller_unit.m_unit) {
@@ -100,34 +138,40 @@ namespace LoomNet {
 				}
 				unit_index--;
 			}
-			return time_index;
+			return { unit_index, time_index };
 		}
 
-		const Unit m_unit;
-		const uint32_t m_time;
+		Unit m_unit;
+		uint32_t m_time;
 	};
+
+	const TimeInterval TIME_NONE(TimeInterval::NONE, 0);
 
 	class NetworkSim {
 	public:
 		NetworkSim()
 			: m_net_write([](const std::array<uint8_t, 255> & packet) {})
-			, m_net_read([]() { return std::array<uint8_t, 255>(); }) {}
+			, m_net_read([]() { return std::array<uint8_t, 255>(); })
+			, m_get_time([]() { return 0; }) {}
 
 		void set_net_write(const std::function<void(std::array<uint8_t, 255>)>& func) { m_net_write = func; }
-		void set_net_read(const std::function<std::array<uint8_t, 255>(void)> & func) { m_net_read = func; }
+		void set_net_read(const std::function<std::array<uint8_t, 255>(void)>& func) { m_net_read = func; }
+		void set_get_time(const std::function<uint32_t(void)>& func) { m_get_time = func; }
 
 		void net_write(const std::array<uint8_t, 255> & packet) const { m_net_write(packet); }
 		std::array<uint8_t, 255> net_read() const { return m_net_read(); }
+		uint32_t get_time() const { return m_get_time(); }
 
 	private:
 		std::function<void(std::array<uint8_t, 255>)> m_net_write;
 		std::function<std::array<uint8_t, 255>(void)> m_net_read;
+		std::function<uint32_t(void)> m_get_time;
 	};
 
 	// debug stuff for simulation
 	// TODO: replace this stuff with real numbers
-	constexpr uint8_t CYCLES_PER_REFRESH = 5;
-	constexpr auto LOOPS_PER_SLOT = 5;
+	constexpr uint8_t CYCLES_PER_BATCH = 5;
+	constexpr uint8_t LOOPS_PER_SLOT = 5;
 	constexpr uint8_t CYCLE_GAP = 2;
 	const TimeInterval SLOT_LENGTH(TimeInterval::Unit::SECOND, 1);
 	const uint8_t BATCH_GAP = 5;

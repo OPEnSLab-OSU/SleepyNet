@@ -139,7 +139,7 @@ namespace LoomNet {
 
 	class RefreshFragment : public Fragment {
 	public:
-		explicit RefreshFragment(const uint16_t src_addr, const TimeInterval data_interval, const TimeInterval refresh_interval, const uint8_t count)
+		RefreshFragment(const uint16_t src_addr, const TimeInterval data_interval, const TimeInterval refresh_interval, const uint8_t count)
 			: Fragment(PacketCtrl::REFRESH_INITIAL, src_addr) {
 			auto packet = get_write_start();
 			auto pkt_count = get_write_count();
@@ -156,6 +156,9 @@ namespace LoomNet {
 				calc_framecheck(9);
 			}
 		}
+
+		explicit RefreshFragment(const uint8_t* raw_packet, const uint8_t max_length)
+			: Fragment(raw_packet, max_length) {}
 
 		TimeInterval get_data_interval() const { return TimeInterval(get_write_start()[0] & static_cast<uint8_t>(0x07), get_write_start()[1]); }
 		TimeInterval get_refresh_interval() const { 

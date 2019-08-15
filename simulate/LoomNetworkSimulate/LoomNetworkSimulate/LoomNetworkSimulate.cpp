@@ -190,8 +190,11 @@ int main()
 			busy = false;
 			return airwaves;
 		});
+		uint32_t slot = 0;
+		// get the current time as the current slot
+		sim_net.set_get_time([&slot]() { return slot; });
 		// iterate!
-		for (uint16_t slot = 0; slot < NET_ITER; slot++) {
+		for (; slot < NET_ITER; slot++) {
 			// clear the network
 			if (busy)
 				std::cout << "Unread network packet!";

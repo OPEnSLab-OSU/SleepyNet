@@ -280,7 +280,7 @@ namespace LoomNet {
 			{
 				self_slot,
 				total_slots,
-				topology["config"]["cycles_per_refresh"] | LoomNet::CYCLES_PER_REFRESH,
+				topology["config"]["cycles_per_refresh"] | LoomNet::CYCLES_PER_BATCH,
 				send_slots,
 				child_slot,
 				child_slot_count

@@ -83,13 +83,14 @@ namespace LoomNet {
 			// in the meantime, we assume that the timing is always correct
 			// update our state
 			const Slotter::State cur_state = m_slot.get_state();
-			if (cur_state == Slotter::State::SLOT_WAIT_REFRESH) 
+			if (cur_state == Slotter::State::SLOT_WAIT_REFRESH) {
 				m_state = State::MAC_REFRESH_WAIT;
-			else if (cur_state == Slotter::State::SLOT_SEND) {
+			}
+			else if (cur_state == Slotter::State::SLOT_SEND || cur_state == Slotter::State::SLOT_SEND_W_SYNC) {
 				m_state = State::MAC_DATA_SEND_RDY;
 				m_send_type = SendType::MAC_DATA;
 			}
-			else if (cur_state == Slotter::State::SLOT_RECV) {
+			else if (cur_state == Slotter::State::SLOT_RECV || cur_state == Slotter::State::SLOT_RECV_W_SYNC) {
 				m_state = State::MAC_DATA_WAIT;
 				m_send_type = SendType::MAC_ACK_WITH_DATA;
 			}
@@ -104,8 +105,18 @@ namespace LoomNet {
 		// we do one slot for debugging purposes
 		TimeInterval sleep_next_wake_time() const {
 			const Slotter::State state = m_slot.get_state();
+			const TimeInterval time(TimeInterval::SECOND, m_network.get_time());
 			if (state == Slotter::State::SLOT_WAIT_REFRESH)
-				return { TimeInterval::Unit::SECOND, BATCH_GAP };
+				return m_next_refresh_cycle != TIME_NONE && m_next_refresh_cycle > time
+					? m_next_refresh_cycle - time
+					: TIME_NONE;
+			// else if it's the first cycle, we have to account for synchronizing the data
+			// cycle
+			else if (state == Slotter::State::SLOT_RECV_W_SYNC || state == Slotter::State::SLOT_SEND_W_SYNC) {
+				return m_next_data_cycle != TIME_NONE && m_next_data_cycle > time
+					? m_next_data_cycle - time + TimeInterval(TimeInterval::SECOND, m_slot.get_slot_wait())
+					: TimeInterval(TimeInterval::Unit::SECOND, m_slot.get_slot_wait());
+			}
 			else
 				return { TimeInterval::Unit::SECOND, m_slot.get_slot_wait() };
 		}
@@ -233,6 +244,7 @@ namespace LoomNet {
 
 		void check_for_refresh() {
 			// if we're a router or end device, just check and see if anyone has transmitted a signal
+			const TimeInterval time_now(TimeInterval::SECOND, m_network.get_time());
 			if (m_self_type != DeviceType::COORDINATOR) {
 				// check our "network"
 				const std::array<uint8_t, 255> & recv = m_network.net_read();
@@ -245,10 +257,16 @@ namespace LoomNet {
 					// TODO: Retransmission
 					if (get_packet_control(recv) == PacketCtrl::REFRESH_INITIAL
 						&& check_packet(recv, m_self_addr)) {
+						// get a copy of the fragment
+						const RefreshFragment ref_frag(recv.data(), static_cast<uint8_t>(recv.size()));
+						// set the next data and refresh cycle based on the data
 						// TODO: Do things based off of m_next_data_cycle
-						m_next_data_cycle = 
+						m_next_data_cycle = ref_frag.get_data_interval() + time_now;
+						m_next_refresh_cycle = ref_frag.get_refresh_interval() + time_now;
 						m_state = State::MAC_SLEEP_RDY;
-						m_slot.next_state();
+						// increment the slotter state, if we haven't already via sleep_wake_ack
+						if (m_slot.get_state() == Slotter::State::SLOT_WAIT_REFRESH)
+							m_slot.next_state();
 					}
 				}
 			}
@@ -256,16 +274,22 @@ namespace LoomNet {
 			else {
 				// write to the network
 				// TODO: exact timings
-				const RefreshFragment frag(m_self_addr,
-					{ TimeInterval::Unit::SECOND, BATCH_GAP },
-					{ TimeInterval::Unit::SECOND, BATCH_GAP + REFRESH_CYCLE_SLOTS },
-					0 );
+				const TimeInterval next_data(TimeInterval::Unit::SECOND, REFRESH_CYCLE_SLOTS);
+				// calculate the number of slots remaining until the next refresh using preconfigured values
+				const uint32_t slots_until_refresh = (m_slot.get_total_slots() + CYCLE_GAP) * (CYCLES_PER_BATCH - 1) - CYCLE_GAP 
+					+ BATCH_GAP + REFRESH_CYCLE_SLOTS;
+				const TimeInterval next_refresh(TimeInterval::Unit::SECOND, slots_until_refresh);
+				const RefreshFragment frag(m_self_addr, next_data, next_refresh, 0 );
 				std::array<uint8_t, 255> temp;
 				for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag[i];
 				m_network.net_write(temp);
 				// next state!
+				m_next_data_cycle = time_now + next_data;
+				m_next_refresh_cycle = time_now + next_refresh;
 				m_state = State::MAC_SLEEP_RDY;
-				m_slot.next_state();
+				// increment the slotter state, if we haven't already via sleep_wake_ack
+				if (m_slot.get_state() == Slotter::State::SLOT_WAIT_REFRESH)
+					m_slot.next_state();
 			}
 		}
 

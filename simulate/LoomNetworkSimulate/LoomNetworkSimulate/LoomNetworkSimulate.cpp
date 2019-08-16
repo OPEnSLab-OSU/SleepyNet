@@ -10,6 +10,9 @@
 #include <vector>
 #include <bitset>
 #include <iomanip>
+#include <string>
+#include <sstream>
+#include <limits>
 
 class Int {
 public:
@@ -185,12 +188,16 @@ int main()
 			busy = true;
 		});
 		// every time any device reads from the network
-		sim_net.set_net_read([&airwaves, &busy]() {
+		sim_net.set_net_read([&airwaves, &busy](const bool clear) {
 			// not busy anymore! we read already
 			busy = false;
-			return airwaves;
+			// clear if needed
+			const std::array<uint8_t, 255> copy = airwaves;
+			if (clear) airwaves.fill(0);
+			return copy;
 		});
 		uint32_t slot = 0;
+		uint32_t slot_break = 0;
 		// get the current time as the current slot
 		sim_net.set_get_time([&slot]() { return slot; });
 		// iterate!
@@ -223,7 +230,15 @@ int main()
 						std::cout << std::hex << devices[i].get_router().get_self_addr() << " closed!" << std::endl;
 					// sleep check
 					else if (!(status & NetStatus::NET_SLEEP_RDY)) {
-						// TODO: Send/Recvieve data!
+						// Send/recieve data!
+						if (status & NetStatus::NET_RECV_RDY) {
+							std::cout << "	0x" << std::hex << std::setfill('0') << std::setw(4) << devices[i].get_router().get_self_addr();
+							std::cout << " recieved: " << std::endl;
+							do {
+								const DataFragment& frag = devices[i].app_recv();
+								std::cout << "		" << std::string(reinterpret_cast<const char*>(frag.get_payload()), frag.get_payload_length()) << std::endl;
+							} while (devices[i].get_status() & NetStatus::NET_RECV_RDY);
+						}
 						// run the state machine
 						const uint8_t new_status = devices[i].net_update();
 						std::cout << "		Status of 0x" << std::hex << std::setfill('0') << std::setw(4) << devices[i].get_router().get_self_addr() << ": " << std::bitset<8>(devices[i].get_status()) << std::endl;
@@ -236,6 +251,49 @@ int main()
 				iterations++;
 			} while (!all_sleep);
 			std::cout << "	Took " << iterations << " iterations." << std::endl;
+			// simple command line interface to make debugging easier
+			while (slot_break == slot) {
+				// get the input and split by spaces
+				std::cout << "What next?" << std::endl;
+				std::string input;
+				std::getline(std::cin, input);
+				std::istringstream stream(input);
+				std::vector<std::string> words(std::istream_iterator<std::string>{stream}, std::istream_iterator<std::string>());
+				// check for a command
+				const auto& command = words.at(0);
+				if (command.compare("run") == 0)
+					// run for n slots
+					slot_break = slot + std::stoi(words.at(1));
+				else if (command.compare("send") == 0) {
+					// tell a device to send a packet
+					// first get the address
+					const uint16_t src_hex_addr = static_cast<uint16_t>(std::stoi(words.at(1).substr(2), nullptr, 16));
+					// find the device with the right address
+					size_t index = std::numeric_limits<size_t>::max();
+					for (size_t i = 0; i < devices.size(); i++) {
+						if (devices[i].get_router().get_self_addr() == src_hex_addr) {
+							index = i;
+							break;
+						}
+					}
+					if (index == std::numeric_limits<size_t>::max())
+						std::cout << "Could not find specified device: 0x" << std::hex << std::setfill('0') << std::setw(4) << src_hex_addr << std::endl;
+					else if ((devices[index].get_status() & NetStatus::NET_SEND_RDY) == 0)
+						std::cout << "Device is unable to send!" << std::endl;
+					// tell the device to send the data
+					else {
+						// parse the destination address
+						const uint16_t dst_hex_addr = static_cast<uint16_t>(std::stoi(words.at(2).substr(2), nullptr, 16));
+						// and the body
+						const auto& body = words.at(3);
+						// send the packet!
+						devices[index].app_send(dst_hex_addr,
+												0, 
+												reinterpret_cast<const uint8_t* const>(body.c_str()), 
+												static_cast<uint8_t>(body.length()));
+					}
+				}
+			}
 		}
 	}
 

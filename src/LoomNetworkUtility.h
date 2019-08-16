@@ -147,24 +147,48 @@ namespace LoomNet {
 
 	const TimeInterval TIME_NONE(TimeInterval::NONE, 0);
 
+	DeviceType get_type(const uint16_t addr) {
+		if (addr == ADDR_NONE || addr == ADDR_ERROR) return DeviceType::ERROR;
+		// figure out device type and parent address from there
+		// if theres any node address, it's an end device
+		if (addr & 0x00FF) return DeviceType::END_DEVICE;
+		// else it's a router
+		// if theres a first router in the address, check if there's a second
+		if (addr & 0x0F00) return DeviceType::SECOND_ROUTER;
+		return DeviceType::FIRST_ROUTER;
+	}
+
+	uint16_t get_parent(const uint16_t addr, const DeviceType type) {
+		if (addr == ADDR_NONE || addr == ADDR_ERROR || type == DeviceType::ERROR)
+			return ADDR_ERROR;
+		// remove node address from end device
+		if (type == DeviceType::END_DEVICE) return addr & 0xFF00;
+		// remove second router address from secound router
+		if (type == DeviceType::SECOND_ROUTER) return addr & 0xF000;
+		// parent of first router is always coordinator
+		if (type == DeviceType::FIRST_ROUTER) return ADDR_COORD;
+		// huh
+		return ADDR_ERROR;
+	}
+
 	class NetworkSim {
 	public:
 		NetworkSim()
 			: m_net_write([](const std::array<uint8_t, 255> & packet) {})
-			, m_net_read([]() { return std::array<uint8_t, 255>(); })
+			, m_net_read([](const bool clear) { return std::array<uint8_t, 255>(); })
 			, m_get_time([]() { return 0; }) {}
 
 		void set_net_write(const std::function<void(std::array<uint8_t, 255>)>& func) { m_net_write = func; }
-		void set_net_read(const std::function<std::array<uint8_t, 255>(void)>& func) { m_net_read = func; }
+		void set_net_read(const std::function<std::array<uint8_t, 255>(const bool)>& func) { m_net_read = func; }
 		void set_get_time(const std::function<uint32_t(void)>& func) { m_get_time = func; }
 
 		void net_write(const std::array<uint8_t, 255> & packet) const { m_net_write(packet); }
-		std::array<uint8_t, 255> net_read() const { return m_net_read(); }
+		std::array<uint8_t, 255> net_read(const bool clear) const { return m_net_read(clear); }
 		uint32_t get_time() const { return m_get_time(); }
 
 	private:
 		std::function<void(std::array<uint8_t, 255>)> m_net_write;
-		std::function<std::array<uint8_t, 255>(void)> m_net_read;
+		std::function<std::array<uint8_t, 255>(const bool)> m_net_read;
 		std::function<uint32_t(void)> m_get_time;
 	};
 

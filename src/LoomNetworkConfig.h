@@ -188,23 +188,10 @@ namespace LoomNet {
 		else {
 			// search the tree for our device name, keeping track of how many routers we've traversed
 			address = m_recurse_traverse(root_obj, self_name, self_obj, depth);
+			type = get_type(address);
+			parent = get_parent(address, type);
 			// error if not found
-			if (address == ADDR_NONE || address == ADDR_ERROR) return { ROUTER_ERROR, SLOTTER_ERROR };
-			// figure out device type and parent address from there
-			// if theres any node address, it's an end device
-			if (address & 0x00FF) type = DeviceType::END_DEVICE;
-			// else it's a router
-			else {
-				// if theres a first router in the address, check if there's a second
-				if (address & 0x0F00) type = DeviceType::SECOND_ROUTER;
-				else type = DeviceType::FIRST_ROUTER;
-			}
-			// remove node address from end device
-			if (type == DeviceType::END_DEVICE) parent = address & 0xFF00;
-			// remove second router address from secound router
-			else if (type == DeviceType::SECOND_ROUTER) parent = address & 0xF000;
-			// parent of first router is always coordinator
-			if (type == DeviceType::FIRST_ROUTER || !parent) parent = ADDR_COORD;
+			if (type == DeviceType::ERROR || parent == ADDR_ERROR) return { ROUTER_ERROR, SLOTTER_ERROR };
 		}
 		// next, we need to find our devices children in the JSON
 		// find the array of children we would like to search

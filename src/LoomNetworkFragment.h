@@ -25,16 +25,16 @@ namespace LoomNet {
 			return (static_cast<uint16_t>(packet[1]) | static_cast<uint16_t>(packet[2]) << 8) == expected_src;
 		// else if it's a refresh check the framecheck with a fixed offset
 		else if (ctrl == PacketCtrl::REFRESH_INITIAL) {
-			return calc_framecheck_global(packet, 9) 
+			return calc_framecheck_global(packet, 6) 
 				== (static_cast<uint16_t>(packet[9]) | static_cast<uint16_t>(packet[10]) << 8);
 		}
 		// else check the framecheck based off of an encoded offset
 		else if (ctrl == PacketCtrl::DATA_ACK_W_DATA
 			|| ctrl == PacketCtrl::DATA_TRANS
 			|| ctrl == PacketCtrl::REFRESH_ADDITONAL) {
-			const uint8_t endpos = packet[3] + 3;
+			const uint8_t endpos = packet[3];
 			return calc_framecheck_global(packet, endpos)
-				== (static_cast<uint16_t>(packet[endpos]) | static_cast<uint16_t>(packet[endpos + 1]) << 8);
+				== (static_cast<uint16_t>(packet[endpos + 3]) | static_cast<uint16_t>(packet[endpos + 4]) << 8);
 		}
 		// else the packet control is invalid, oops
 		return false;
@@ -75,6 +75,7 @@ namespace LoomNet {
 		void set_control(const PacketCtrl ctrl) { m_payload[0] = ctrl; }
 		// set the control to an error if something invalid happens down the chain
 		void set_error() { m_payload[0] = PacketCtrl::ERROR; }
+		uint16_t get_src() const { return static_cast<uint16_t>(m_payload[1]) | static_cast<uint16_t>(m_payload[2]) << 8; }
 		void set_src(const uint16_t src_addr) { 
 			m_payload[1] = static_cast<uint8_t>(src_addr & 0xff);
 			m_payload[2] = static_cast<uint8_t>(src_addr >> 8);
@@ -83,8 +84,8 @@ namespace LoomNet {
 		// run this function right before the packet is sent, to ensure it is correct
 		void calc_framecheck(const uint8_t endpos) { 
 			const uint16_t check = calc_framecheck_global(m_payload, endpos); 
-			m_payload[endpos] = check & 0xff;
-			m_payload[endpos + 1] = check >> 8;
+			get_write_start()[endpos] = check & 0xff;
+			get_write_start()[endpos + 1] = check >> 8;
 		}
 		// run this function right after the packet has been recieved to verify the packet
 		bool check_framecheck(const uint8_t endpos) { 
@@ -103,19 +104,19 @@ namespace LoomNet {
 			, m_next_hop_addr(next_addr) {
 			auto packet = get_write_start();
 			auto count = get_write_count();
-			const auto end_pos = length + 6;
+			const auto frag_len = length + 7;
 			// overflow check
-			if (end_pos > count) set_error();
+			if (frag_len > count) set_error();
 			else {
 				// copy our data into the payload
-				packet[0] = end_pos;
+				packet[0] = frag_len;
 				packet[1] = static_cast<uint8_t>(dst_addr & 0xff);
 				packet[2] = static_cast<uint8_t>(dst_addr >> 8);
 				packet[3] = static_cast<uint8_t>(orig_src_addr & 0xff);
 				packet[4] = static_cast<uint8_t>(orig_src_addr >> 8);
-				for (auto i = 0; i < length; i++) packet[i + 5] = raw_payload[i];
-				// calculate the FCS
-				calc_framecheck(end_pos);
+				packet[5] = seq;
+				packet[6] = 0;
+				for (auto i = 0; i < length; i++) packet[i + 7] = raw_payload[i];
 			}
 		}
 
@@ -125,10 +126,11 @@ namespace LoomNet {
 
 		uint16_t get_dst() const { return static_cast<uint16_t>(get_write_start()[1]) | static_cast<uint16_t>(get_write_start()[2]) << 8; }
 		uint16_t get_orig_src() const { return static_cast<uint16_t>(get_write_start()[3]) | static_cast<uint16_t>(get_write_start()[4]) << 8; }
-		uint8_t* get_payload() { return &(get_write_start()[5]); }
-		const uint8_t* get_payload() const { return &(get_write_start()[5]); }
-		uint8_t get_payload_length() const { const uint8_t num = get_write_start()[5]; return num >= 6 ? num - 6 : 0; }
-		uint8_t get_fragment_length() const { return get_payload_length() + 5; }
+		uint8_t* get_payload() { return &(get_write_start()[7]); }
+		const uint8_t* get_payload() const { return &(get_write_start()[7]); }
+		uint8_t get_payload_length() const { const uint8_t num = get_write_start()[0]; return num >= 7 ? num - 7 : 0; }
+		uint8_t get_fragment_length() const { return get_payload_length() + 7; }
+		uint8_t get_packet_length() const { return get_fragment_length() + 5; }
 		void set_next_hop(const uint16_t next_hop) { m_next_hop_addr = next_hop; }
 		uint16_t get_next_hop() const { return m_next_hop_addr; }
 		void set_is_ack(bool is_ack) { is_ack ? set_control(PacketCtrl::DATA_ACK_W_DATA) : set_control(PacketCtrl::DATA_TRANS); }
@@ -153,7 +155,7 @@ namespace LoomNet {
 				packet[3] = static_cast<uint8_t>(refresh_interval.get_time() >> 8);
 				packet[4] = 0;
 				packet[5] = count;
-				calc_framecheck(9);
+				calc_framecheck(6);
 			}
 		}
 
@@ -168,7 +170,8 @@ namespace LoomNet {
 			);
 		}
 		uint8_t get_count() const { return get_write_start()[5]; }
-		uint8_t get_fragment_length() const { return 11; }
+		uint8_t get_fragment_length() const { return 6; }
+		uint8_t get_packet_length() const { return get_fragment_length() + 5; }
 	};
 
 	class ACKFragment : public Fragment {

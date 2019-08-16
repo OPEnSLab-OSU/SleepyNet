@@ -89,6 +89,8 @@ namespace LoomNet {
 			else if (cur_state == Slotter::State::SLOT_SEND || cur_state == Slotter::State::SLOT_SEND_W_SYNC) {
 				m_state = State::MAC_DATA_SEND_RDY;
 				m_send_type = SendType::MAC_DATA;
+				// set the current send address to our parent
+				m_cur_send_addr = get_parent(m_self_addr, m_self_type);
 			}
 			else if (cur_state == Slotter::State::SLOT_RECV || cur_state == Slotter::State::SLOT_RECV_W_SYNC) {
 				m_state = State::MAC_DATA_WAIT;
@@ -130,8 +132,7 @@ namespace LoomNet {
 				if (m_send_type == SendType::MAC_ACK_WITH_DATA)
 					frag.set_is_ack(true);
 				// commit the framecheck
-				frag.calc_framecheck(frag.get_fragment_length() - 2);
-
+				frag.calc_framecheck(frag.get_fragment_length());
 				// write to the "network"
 				for (uint8_t i = 0; i < m_staging.size(); i++) m_staging[i] = frag[i];
 				m_network.net_write(m_staging);
@@ -156,10 +157,14 @@ namespace LoomNet {
 
 		DataFragment get_staged_packet() {
 			if (m_staged) {
+				const DataFragment ret( m_staging.data(), static_cast<uint8_t>(m_staging.size()) );
 				if (m_state == State::MAC_DATA_RECV_RDY) {
 					// next state!
-					if (m_send_type == SendType::MAC_ACK_WITH_DATA)
+					if (m_send_type == SendType::MAC_ACK_WITH_DATA) {
 						m_state = State::MAC_DATA_SEND_RDY;
+						// additionally, set the send endpoint to the recieved address
+						m_cur_send_addr = ret.get_src();
+					}
 					else {
 						m_state = State::MAC_SLEEP_RDY;
 						m_send_type = SendType::NONE;
@@ -172,7 +177,7 @@ namespace LoomNet {
 				}
 				// get the packet
 				m_staged = false;
-				return { m_staging.data(), static_cast<uint8_t>(m_staging.size()) };
+				return ret;
 			}
 			return { ADDR_ERROR, ADDR_ERROR, ADDR_ERROR, 0, nullptr, 0, ADDR_ERROR };
 		}
@@ -193,7 +198,7 @@ namespace LoomNet {
 		State check_for_data() {
 			if (m_state == State::MAC_DATA_WAIT) {
 				// check our "network"
-				const std::array<uint8_t, 255>& recv = m_network.net_read();
+				const std::array<uint8_t, 255>& recv = m_network.net_read(true);
 				if (recv[0]) {
 					// a packet! wow.
 					// if the framecheck fails to verify, ignore the packet
@@ -206,6 +211,8 @@ namespace LoomNet {
 					const PacketCtrl& ctrl = get_packet_control(recv);
 					if (ctrl == PacketCtrl::DATA_TRANS && m_send_type == SendType::MAC_ACK_WITH_DATA) {
 						// first stage packet, recieve it then signal we're ready to send
+						for (uint8_t i = 0; i < m_staging.size(); i++) m_staging[i] = recv[i];
+						m_staged = true;
 						m_state = State::MAC_DATA_RECV_RDY;
 					}
 					else if (ctrl == PacketCtrl::DATA_ACK_W_DATA && m_send_type == SendType::MAC_ACK_NO_DATA) {
@@ -214,6 +221,8 @@ namespace LoomNet {
 						m_send_ack();
 						// ready for next reply
 						m_send_type = SendType::NONE;
+						for (uint8_t i = 0; i < m_staging.size(); i++) m_staging[i] = recv[i];
+						m_staged = true;
 						m_state = State::MAC_DATA_RECV_RDY;
 					}
 					else if (ctrl == PacketCtrl::DATA_ACK 
@@ -247,7 +256,7 @@ namespace LoomNet {
 			const TimeInterval time_now(TimeInterval::SECOND, m_network.get_time());
 			if (m_self_type != DeviceType::COORDINATOR) {
 				// check our "network"
-				const std::array<uint8_t, 255> & recv = m_network.net_read();
+				const std::array<uint8_t, 255> & recv = m_network.net_read(false);
 				if (recv[0]) {
 					// guess we got a refresh packet!
 					// ignore everything in it for now, we'll deal with timing stuff later

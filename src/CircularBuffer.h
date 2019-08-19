@@ -40,8 +40,8 @@ public:
 	bool full() const { return m_length == max_size; }
 	bool empty() const { return m_length == 0; }
 
-	const T& front() const { return operator[](m_start); }
-	T& front() { return operator[](m_start); }
+	const T& front() const { return operator[](0); }
+	T& front() { return operator[](0); }
 
 	const T& back() const { return operator[](m_length - 1); }
 	T& back() { return operator[](m_length - 1); }

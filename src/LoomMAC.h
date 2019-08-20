@@ -68,6 +68,7 @@ namespace LoomNet {
 
 		void reset() {
 			m_state = State::MAC_REFRESH_WAIT;
+			m_send_type = SendType::NONE;
 			m_last_error = Error::MAC_OK;
 			m_staged = false;
 			m_staging.fill(0);
@@ -126,6 +127,7 @@ namespace LoomNet {
 		uint16_t get_cur_send_address() const { return m_cur_send_addr; }
 
 		bool send_fragment(DataFragment frag) {
+			// TODO: This is really brittle, return void?
 			if (m_state == State::MAC_DATA_SEND_RDY && !m_staged) {
 				if (frag.get_next_hop() != m_cur_send_addr) return false;
 				// set the ACK bit if needed
@@ -205,7 +207,10 @@ namespace LoomNet {
 					if (!check_packet(recv, m_cur_send_addr)) {
 						// TODO: Add a "failed count" here
 						m_send_type = SendType::NONE;
-						return m_state = State::MAC_SLEEP_RDY;
+						m_slot_idle = 0;
+						if (m_staged) m_state = State::MAC_DATA_SEND_FAIL;
+						else m_state = State::MAC_SLEEP_RDY;
+						return m_state;
 					}
 					// check to see if it's the right kind of packet
 					const PacketCtrl& ctrl = get_packet_control(recv);
@@ -228,11 +233,14 @@ namespace LoomNet {
 					else if (ctrl == PacketCtrl::DATA_ACK 
 						&& (m_send_type == SendType::MAC_ACK_NO_DATA || m_send_type == SendType::NONE)) {
 						
+						// clear the staged packet, since it sent successfully
+						m_staged = false;
 						// got an ACK! Guess we're finished with this transaction
 						m_state = State::MAC_SLEEP_RDY;
 						m_send_type = SendType::NONE;
 					}
 					else {
+						// TODO: make error handling less brittle
 						m_last_error = Error::WRONG_PACKET_TYPE;
 						m_state = State::MAC_CLOSED;
 					}
@@ -243,6 +251,7 @@ namespace LoomNet {
 						// I suppose you have nothing to say for yourself
 						// very well
 						m_slot_idle = 0;
+						m_send_type = SendType::NONE;
 						if (m_staged) m_state = State::MAC_DATA_SEND_FAIL;
 						else m_state = State::MAC_SLEEP_RDY;
 					}
@@ -301,6 +310,8 @@ namespace LoomNet {
 					m_slot.next_state();
 			}
 		}
+
+		const Slotter& get_slotter() const { return m_slot; }
 
 	private:
 

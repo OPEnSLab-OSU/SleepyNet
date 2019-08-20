@@ -162,7 +162,11 @@ namespace LoomNet {
 		if (addr == ADDR_NONE || addr == ADDR_ERROR || type == DeviceType::ERROR)
 			return ADDR_ERROR;
 		// remove node address from end device
-		if (type == DeviceType::END_DEVICE) return addr & 0xFF00;
+		if (type == DeviceType::END_DEVICE) {
+			const uint16_t router_parent = addr & 0xFF00;
+			if (router_parent) return router_parent;
+			return ADDR_COORD;
+		}
 		// remove second router address from secound router
 		if (type == DeviceType::SECOND_ROUTER) return addr & 0xF000;
 		// parent of first router is always coordinator

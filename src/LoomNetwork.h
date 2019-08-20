@@ -93,6 +93,7 @@ namespace LoomNet {
 						// else we will try again later
 						// the MAC layer will automatically trigger a refresh if 
 						// sending fails consecutivly, so we don't need to do that here
+						// TODO: Refresh after consecutive failures
 					}
 				}
 				// else tell the mac layer we got nothing
@@ -177,12 +178,13 @@ namespace LoomNet {
 			m_buffer_send.reset();
 			// reset state and error
 			m_last_error = Error::NET_OK;
-			m_status = 0;
+			m_status = Status::NET_SEND_RDY;
 		}
 
 		Error get_last_error() const { return m_last_error; }
 		uint8_t get_status() const { return m_status; }
 		const Router& get_router() const { return m_router; }
+		const MAC& get_mac() const { return m_mac; }
 
 	private:
 		uint8_t m_halt_error(Error error) {

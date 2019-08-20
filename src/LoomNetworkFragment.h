@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "../simulate/LoomNetworkSimulate/LoomNetworkSimulate/FastCRC.h"
 #include "LoomNetworkUtility.h"
 /**
  * Data types for Loom Network Packets
@@ -9,13 +10,13 @@ namespace LoomNet {
 	PacketCtrl get_packet_control(const std::array<uint8_t, 255> & packet) {
 		return static_cast<PacketCtrl>(packet[0]);
 	}
-
-	uint16_t calc_framecheck_global(const std::array<uint8_t, 255> & packet, const uint8_t framecheck_index) {
-		return 0xBEEF;
+	
+	uint16_t calc_framecheck_global(const uint8_t* packet, const uint8_t length) {
+		return FastCRC16().xmodem(packet, length);
 	}
 
-	uint16_t calc_framecheck_global(const uint8_t* packet, const uint8_t framecheck_index) {
-		return 0xBEEF;
+	uint16_t calc_framecheck_global(const std::array<uint8_t, 255> & packet, const uint8_t length) {
+		return calc_framecheck_global(packet.data(), length);
 	}
 
 	bool check_packet(const std::array<uint8_t, 255> & packet, const uint16_t expected_src) {
@@ -25,16 +26,16 @@ namespace LoomNet {
 			return (static_cast<uint16_t>(packet[1]) | static_cast<uint16_t>(packet[2]) << 8) == expected_src;
 		// else if it's a refresh check the framecheck with a fixed offset
 		else if (ctrl == PacketCtrl::REFRESH_INITIAL) {
-			return calc_framecheck_global(packet, 6) 
-				== (static_cast<uint16_t>(packet[9]) | static_cast<uint16_t>(packet[10]) << 8);
+			return calc_framecheck_global(packet, 9) 
+				== (static_cast<uint16_t>(packet[9]) | (static_cast<uint16_t>(packet[10]) << 8));
 		}
 		// else check the framecheck based off of an encoded offset
 		else if (ctrl == PacketCtrl::DATA_ACK_W_DATA
 			|| ctrl == PacketCtrl::DATA_TRANS
 			|| ctrl == PacketCtrl::REFRESH_ADDITONAL) {
 			const uint8_t endpos = packet[3];
-			return calc_framecheck_global(packet, endpos)
-				== (static_cast<uint16_t>(packet[endpos + 3]) | static_cast<uint16_t>(packet[endpos + 4]) << 8);
+			return calc_framecheck_global(packet, endpos + 3)
+				== (static_cast<uint16_t>(packet[endpos + 3]) | (static_cast<uint16_t>(packet[endpos + 4]) << 8));
 		}
 		// else the packet control is invalid, oops
 		return false;
@@ -83,7 +84,7 @@ namespace LoomNet {
 		// calculate frame control sequence
 		// run this function right before the packet is sent, to ensure it is correct
 		void calc_framecheck(const uint8_t endpos) { 
-			const uint16_t check = calc_framecheck_global(m_payload, endpos); 
+			const uint16_t check = calc_framecheck_global(m_payload, endpos + 3); 
 			get_write_start()[endpos] = check & 0xff;
 			get_write_start()[endpos + 1] = check >> 8;
 		}

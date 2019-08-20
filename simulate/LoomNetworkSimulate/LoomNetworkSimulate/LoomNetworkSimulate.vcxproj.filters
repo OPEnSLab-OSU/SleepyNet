@@ -18,6 +18,12 @@
     <ClCompile Include="LoomNetworkSimulate.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="FastCRChw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FastCRCsw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\LoomNetwork.h">
@@ -48,6 +54,18 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\LoomNetworkInfo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FastCRC.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FastCRC_cpu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FastCRC_tables.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pgmspace.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -15,6 +15,7 @@
 #include <limits>
 #include <array>
 #include <utility>
+#include <random>
 
 class Int {
 public:
@@ -67,31 +68,12 @@ public:
 		} }
 		, busy(false)
 		, next_wake_times{ 0 }
-		, sim_net() 
+		, sim_net()
 		, cur_slot(0)
 		, send_track()
+		, rand_engine(std::random_device()())
 	{
-		// every time the device writes to the network
-		sim_net.set_net_write([this](std::array<uint8_t, 255> packet) {
-			// std::cout << "		Transmission from: 0x" << std::hex << std::setfill('0') << std::setw(4) << (static_cast<uint16_t>(packet[1]) | static_cast<uint16_t>(packet[2]) << 8) << std::endl;
-			if (busy) {
-				std::cout << "		Collision!" << std::endl;
-			}
-			// set the airwaves
-			airwaves = packet;
-			busy = true;
-			});
-		// every time any device reads from the network
-		sim_net.set_net_read([this](const bool clear) {
-			// not busy anymore! we read already
-			busy = false;
-			// clear if needed
-			const std::array<uint8_t, 255> copy = airwaves;
-			if (clear) airwaves.fill(0);
-			return copy;
-		});
-		// get the current time as the current slot
-		sim_net.set_get_time([this]() { return cur_slot; });
+		reset();
 	}
 
 	bool next_slot(bool quiet = false) {
@@ -193,13 +175,13 @@ public:
 		return true;
 	}
 
-	uint8_t next_cycle() {
+	uint8_t next_cycle(bool quiet = true) {
 		// use the coordinator to judge the current state of the network
 		const LoomNet::Slotter& slot = devices[15].get_mac().get_slotter();
 		uint8_t last_cycle;
 		do {
 			last_cycle = slot.get_cur_data_cycle();
-			if (!next_slot(true)) {
+			if (!next_slot(quiet)) {
 				std::cout << " Failed during next cycle" << std::endl;
 				return 0;
 			}
@@ -246,6 +228,54 @@ public:
 		next_wake_times.fill(0);
 		cur_slot = 0;
 		send_track.clear();
+		// every time the device writes to the network
+		sim_net.set_net_write([this](std::array<uint8_t, 255> packet) {
+			if (busy) {
+				std::cout << "		Collision!" << std::endl;
+			}
+			// set the airwaves
+			airwaves = packet;
+			busy = true;
+			});
+		// every time any device reads from the network
+		sim_net.set_net_read([this](const bool clear) {
+			// not busy anymore! we read already
+			busy = false;
+			// clear if needed
+			const std::array<uint8_t, 255> copy = airwaves;
+			if (clear) airwaves.fill(0);
+			return copy;
+			});
+		// get the current time as the current slot
+		sim_net.set_get_time([this]() { return cur_slot; });
+	}
+
+	void enable_lossy_network(int prob) {
+		// every time the device writes to the network
+		sim_net.set_net_write([this, prob](std::array<uint8_t, 255> packet) {
+			std::cout << "		Transmission from: 0x" << std::hex << std::setfill('0') << std::setw(4) << (static_cast<uint16_t>(packet[1]) | static_cast<uint16_t>(packet[2]) << 8) << std::endl;
+			if (busy) {
+				std::cout << "		Collision!" << std::endl;
+			}
+			// have a certain probability of losing the packet
+			if (std::uniform_int_distribution<int>(0, 99)(rand_engine) > prob) {
+				// set the airwaves
+				airwaves = packet;
+				busy = true;
+			}
+			else std::cout << "								Dropped packet!" << std::endl;
+		});
+		// every time any device reads from the network
+		sim_net.set_net_read([this](const bool clear) {
+			// not busy anymore! we read already
+			busy = false;
+			// clear if needed
+			const std::array<uint8_t, 255> copy = airwaves;
+			if (clear) airwaves.fill(0);
+			return copy;
+		});
+		// get the current time as the current slot
+		sim_net.set_get_time([this]() { return cur_slot; });
 	}
 
 	size_t pending_packet_count() const { return send_track.size(); }
@@ -257,6 +287,7 @@ public:
 	LoomNet::NetworkSim sim_net;
 	size_t cur_slot;
 	std::multimap<uint16_t, NetTrack> send_track;
+	std::default_random_engine rand_engine;
 };
 
 int main()
@@ -385,6 +416,7 @@ int main()
 			}
 		}
 		std::cout << "Idle test passed!" << std::endl;
+		std::cout << "Begin single send test." << std::endl;
 		network.reset();
 		// simuation two: single send/recieve combination to every device
 		// get past the refresh cycle first
@@ -428,7 +460,76 @@ int main()
 			}
 		}
 		std::cout << "Single send test passed!" << std::endl;
+		std::cout << "Begin no coordinator test:" << std::endl;
+		network.reset();
+		// simuation three: no coordinator, devices eventually just error out
+		auto i = 0;
+		for (; i < 1000; i++) {
+			bool all_closed = true;
+			for (auto& d : network.devices) {
+				if (d.get_router().get_device_type() != DeviceType::COORDINATOR) {
+					const auto status = d.net_update();
+					if (status & TestNetwork::NetStatus::NET_SLEEP_RDY) {
+						std::cout << "No coordinator test failed on address: 0x" << std::hex << std::setfill('0') << std::setw(4) << d.get_router().get_self_addr() << std::endl;
+						return false;
+					}
+					all_closed &= (status == TestNetwork::NetStatus::NET_CLOSED);
+				}
+			}
+			if (all_closed) {
+				std::cout << "No coordinator test passed in " << std::dec << i << " slots" << std::endl;
+				break;
+			}
+		}
+		if (i == 1000) std::cout << "No coordinator test failed!" << std::endl;
+		std::cout << "End no coordinator test" << std::endl;
 
+		// simulation four: same as simulation two, but packets drop randomly inside the network
+		std::cout << "Begin lossy single send test." << std::endl;
+		network.reset();
+		// get past the refresh cycle first
+		for (auto i = 0; i < 5; i++) {
+			if (!network.next_slot()) {
+				std::cout << "Single send prep failed" << std::endl;
+				return false;
+			}
+		}
+		// start your engines!
+		network.enable_lossy_network(5);
+		// for every combination of addressi
+		for (const auto src : all_addrs) {
+			for (const auto dst : all_addrs) {
+				if (src != dst) {
+					char buf[16];
+					snprintf(buf, sizeof(buf), "0x%04X->%04X", src, dst);
+					if (!network.send_data_and_verify(src, dst, std::string(buf))) {
+						std::cout << "Failed to send: " << src << "->" << dst << std::endl;
+						return false;
+					}
+					// run until success, with six iterations of all end devices sending data
+					for (auto i = 0; i < 6; i++) {
+						for (auto& d : network.devices) {
+							if (d.get_router().get_device_type() == LoomNet::DeviceType::END_DEVICE) {
+								if (!network.send_data_and_verify(d.get_router().get_self_addr(), ADDR_COORD, std::string("use LOOM!"))) {
+									std::cout << "Failed to send: " << d.get_router().get_self_addr() << "->" << ADDR_COORD << std::endl;
+									return false;
+								}
+							}
+						}
+						// next cycle!
+						network.next_cycle(false);
+					}
+					// run a few more times to clean out the residual packets
+					for (auto i = 0; i < 4; i++) network.next_cycle();
+					// check if all the packets made it
+					if (network.pending_packet_count()) {
+						std::cout << "Single send failed to clear network" << std::endl;
+						return false;
+					}
+				}
+			}
+		}
+		std::cout << "Lossy single send test passed!" << std::endl;
 	}
 
 	std::cout << "end testing Loom Network operation" << std::endl;

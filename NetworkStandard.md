@@ -72,7 +72,7 @@ The network layer shall automatically handle packet passing if the device is not
 
 A Loom Network Stack shall assume that the MAC layer will allow transmission at any time to a coordinator, however no other device will have this capability.
 
-If the MAC layer indicates a transmission failure, the network can attempt to retry a transmission during it's next allocated time slot. After 5 consecutive failures, both the receiving node and the transmitting node are assumed to be operating incorrectly, and this information is sent to the coordinator and the MAC layer for further action. The data can be dropped or retransmitted at a later time. If the packet dropped is in a sequence, the entire sequence is dropped.
+If the MAC layer indicates a transmission failure, the network can attempt to retry a transmission during it's next allocated time slot. After 5 consecutive failures, both the receiving node and the transmitting node are assumed to be operating incorrectly. The data can be dropped or retransmitted at a later time. If the packet dropped is in a sequence, the sequence is either resumed immediately after the device is resynchronized or the entire sequence is dropped.
 
 ### Application
 

@@ -202,5 +202,5 @@ namespace LoomNet {
 	constexpr uint8_t LOOPS_PER_SLOT = 5;
 	constexpr uint8_t CYCLE_GAP = 2;
 	const TimeInterval SLOT_LENGTH(TimeInterval::Unit::SECOND, 1);
-	const uint8_t BATCH_GAP = 5;
+	constexpr uint8_t BATCH_GAP = 5;
 }

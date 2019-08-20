@@ -37,6 +37,7 @@ namespace LoomNet {
 						config.slot_info, 
 						network)
 			, m_router(config.route_info)
+			, m_fail_count(0)
 			, m_addr(config.route_info.get_self_addr())
 			, m_buffer_send()
 			, m_buffer_recv()
@@ -90,10 +91,8 @@ namespace LoomNet {
 							// hey there's a new spot!
 							m_status |= Status::NET_SEND_RDY;
 						}
-						// else we will try again later
-						// the MAC layer will automatically trigger a refresh if 
-						// sending fails consecutivly, so we don't need to do that here
-						// TODO: Refresh after consecutive failures
+						// else we've broken the network somehow, and need to reset
+						else return m_halt_error(Error::INVAL_MAC_STATE);
 					}
 				}
 				// else tell the mac layer we got nothing
@@ -101,9 +100,19 @@ namespace LoomNet {
 			}
 			// if the MAC layer failed to send, add the packet back to the buffer for later
 			else if (mac_status == MAC::State::MAC_DATA_SEND_FAIL) {
-				// TODO: figure out some better way of handling errors
+				// we always keep an open spot for a failed packet to pop back into
+				// if the packet doesn't insert for some reason, the network has broken
 				if (!m_buffer_send.emplace_back(m_mac.get_staged_packet()))
 					return m_halt_error(Error::SEND_BUF_FULL);
+				// tally up the number of broken packets, and if it's > 5 we need to reset
+				if (++m_fail_count >= 5) {
+					// reset the MAC layer
+					m_mac.reset();
+					// reset all of our values, except for the buffers which need to be kept
+					// so we can continue transmitting
+					m_fail_count = 0;
+					m_status = Status::NET_SEND_RDY;
+				}
 			}
 			// if the mac has data ready to be copied, do that
 			else if (mac_status == MAC::State::MAC_DATA_RECV_RDY) {
@@ -173,6 +182,8 @@ namespace LoomNet {
 		void reset() {
 			// reset MAC layer
 			m_mac.reset();
+			// set the fail count to zero
+			m_fail_count = 0;
 			// clear buffers
 			m_buffer_recv.reset();
 			m_buffer_send.reset();
@@ -203,6 +214,8 @@ namespace LoomNet {
 
 		MAC m_mac;
 		Router m_router;
+
+		uint8_t m_fail_count;
 
 		const uint16_t m_addr;
 		// TODO: Implement in terms of a binary tree

@@ -154,6 +154,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="FastCRChw.cpp" />
+    <ClCompile Include="FastCRCsw.cpp" />
     <ClCompile Include="LoomNetworkSimulate.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -167,6 +169,10 @@
     <ClInclude Include="..\..\..\src\LoomRouter.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkUtility.h" />
     <ClInclude Include="..\..\..\src\LoomSlotter.h" />
+    <ClInclude Include="FastCRC.h" />
+    <ClInclude Include="FastCRC_cpu.h" />
+    <ClInclude Include="FastCRC_tables.h" />
+    <ClInclude Include="pgmspace.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Topology.json" />

@@ -36,7 +36,8 @@ namespace LoomNet {
 		enum class Error {
 			MAC_OK,
 			SEND_FAILED,
-			WRONG_PACKET_TYPE
+			WRONG_PACKET_TYPE,
+			REFRESH_TIMEOUT,
 		};
 
 		MAC(	const uint16_t self_addr, 
@@ -127,7 +128,7 @@ namespace LoomNet {
 		uint16_t get_cur_send_address() const { return m_cur_send_addr; }
 
 		bool send_fragment(DataFragment frag) {
-			// TODO: This is really brittle, return void?
+			// sanity check
 			if (m_state == State::MAC_DATA_SEND_RDY && !m_staged) {
 				if (frag.get_next_hop() != m_cur_send_addr) return false;
 				// set the ACK bit if needed
@@ -261,12 +262,17 @@ namespace LoomNet {
 		}
 
 		void check_for_refresh() {
+			// calculate the number of slots remaining until the next refresh using preconfigured values
+			const uint32_t slots_until_refresh = (m_slot.get_total_slots() + CYCLE_GAP) * (CYCLES_PER_BATCH - 1) - CYCLE_GAP
+				+ BATCH_GAP + REFRESH_CYCLE_SLOTS;
 			// if we're a router or end device, just check and see if anyone has transmitted a signal
 			const TimeInterval time_now(TimeInterval::SECOND, m_network.get_time());
 			if (m_self_type != DeviceType::COORDINATOR) {
 				// check our "network"
 				const std::array<uint8_t, 255> & recv = m_network.net_read(false);
 				if (recv[0]) {
+					// reset the idle counter
+					m_slot_idle = 0;
 					// guess we got a refresh packet!
 					// ignore everything in it for now, we'll deal with timing stuff later
 					// TODO: timing stuff
@@ -287,15 +293,19 @@ namespace LoomNet {
 							m_slot.next_state();
 					}
 				}
+				// if we haven't recieved anything, track how many slots it's been
+				// if it's been over the reasonable number of slots, fail
+				else if (++m_slot_idle >= slots_until_refresh + REFRESH_CYCLE_SLOTS) {
+					// fail
+					m_state = State::MAC_CLOSED;
+					m_last_error = Error::REFRESH_TIMEOUT;
+				}
 			}
 			// else we're a coordinator and we need to do the refresh ourselves
 			else {
 				// write to the network
 				// TODO: exact timings
 				const TimeInterval next_data(TimeInterval::Unit::SECOND, REFRESH_CYCLE_SLOTS);
-				// calculate the number of slots remaining until the next refresh using preconfigured values
-				const uint32_t slots_until_refresh = (m_slot.get_total_slots() + CYCLE_GAP) * (CYCLES_PER_BATCH - 1) - CYCLE_GAP 
-					+ BATCH_GAP + REFRESH_CYCLE_SLOTS;
 				const TimeInterval next_refresh(TimeInterval::Unit::SECOND, slots_until_refresh);
 				const RefreshFragment frag(m_self_addr, next_data, next_refresh, 0 );
 				std::array<uint8_t, 255> temp;

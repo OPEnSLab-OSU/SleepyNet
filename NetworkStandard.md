@@ -114,7 +114,7 @@ Where:
 
 ## MAC
 
-Use modified TMAC shown [here](http://www.cs.umd.edu/~moustafa/papers/IMPACCT2002.pdf). Time sync based off of a periodic refresh signal from the gateway and routers. Each time slot an endpoint does a three part handshake with it's respective router:
+Based off of a modified TMAC shown [here](http://www.cs.umd.edu/~moustafa/papers/IMPACCT2002.pdf). Time sync based off of a periodic refresh signal from the gateway and routers. Each time slot an endpoint does a three part handshake with it's respective router:
  * Send Data to router
  * Receive ACK from router, and receive upstream data from router
  * Send ACK to router.
@@ -140,13 +140,60 @@ If a device is neither in a refresh transaction or data transaction, the device 
 
 In addition to it's transmission period, a router shall remain listening to the network during its end devices' time slots. A coordinator shall be awake at all times.
 
+### Packets
+
+All packets sent by the MAC layer excluding the ACK packet shall follow the format below. Each of these is known as a *packet*, and the Packet Body component of each of these is referred to as a *fragment*. A packet can only contain a single fragment.
+```
++---------+---------+----------------+---------+
+| Control | Source  | Packet Body    | FCS     |
+| 8 Bits  | 16 Bits | 56-250 Bytes   | 16 Bits |
++---------+---------+----------------+---------+
+Where:
+```
+* **Control**
+  * Bits 0-2: Packet type, shown in table below.
+  * Bits 3-4: Protocol version, as of this draft 0.
+  * Bits 4-5: Reserved.
+* **Source** The address of the device that sent this packet. Not to be confused with the original source, which is ignored by the MAC layer.
+* **Packet Body** A fragment containing data from the network or MAC layer.
+* **FCS** A verification mechanism calculated using a 16-bit CRC with the polynomial `x^16+x^12+x^5+1`. The calculation of this value shall include the entire packet structure, excluding the checksum itself.
+
+| Three-Bit Code | Packet Type |
+| --- | --- |
+| 100 | Initial Refresh/Sync Data |
+| 011 | Additional Refresh/Sync Data |
+| 001 | Error |
+| 101 | Data Transmission |
+| 110 | Data ACK |
+| 111 | Data ACK w/ Transmission |
+| 010 | Reserved |
+
 ### Refresh Transaction
 
 Periodically, a Coordinator shall trigger a refresh cycle by broadcasting a refresh packet, to be received by routers. This packet shall contain only the next wakeup times and intervals for the refresh and data periods. The routers and coordinator shall then rebroadcast this data to all of the nodes, in reverse order of time slot priority. If a node does not receive a refresh signal, it assumes data from the last refresh signal received. If a node were to perform this action consecutively, the node instead assumes it has malfunctioned and continues listening for another refresh signal.
 
 If a coordinator would like to send additional routing data during a refresh period, it can do so using the count field of a refresh packet. The Coordinator may chose to repeat this transmission cycle with arbitrary data, signaling using the count field of the initial refresh packet. The initial refresh packet shall always contain synchronization data and shall be a brief packet (to ensure proper synchronization), however further packets may be any length and content. A refresh cycle is finished when a refresh packet is transmitted with count==0. Note that this data is unacknowledged, and that any misheard data is dropped---because of this characteristic, care shall be taken to ensure the state of the node shall not cause conflict should the node fail to receive a refresh.
 
-#### Packet Format
+#### Fragment Format
+
+Initial Refresh Packet, with MAC packet header and footer not shown:
+```
+----+------------------+-------------+----------------+----------+--------+----
+    | Interval Control | Data Offset | Refresh Offset | Reserved | Count  |
+    | 8 Bits           | 8 Bits      | 16 Bits        | 8 Bits   | 8 Bits |
+----+------------------+-------------+----------------+----------+--------+----
+```
+
+Where:
+* **Interval Control**:
+  * Bits 0-2: Time units for Data Offset (see table below)
+  * Bits 3-6: Time units for Refresh Offset (see table below)
+  * Bits 7-8: Reserved
+* **Data Offset**: The amount of time from the end of the transmission of this packet to the first time slot for a Data transaction, in units specified by *interval control*. Must be at least greater than the time needed to complete the refresh cycle.
+* **Refresh Offset**: The amount of time from the end of the transmission of this packet to the next refresh cycle, in units specified by *interval control*.
+* **Reserved**: Discarded.
+* **Count**: The number of consecutive refresh packets following this one (unsigned byte).
+* **FCS**: See data transaction packet format.
 
 | Three-Bit Code | Time Unit |
 | --- | --- |
@@ -159,27 +206,7 @@ If a coordinator would like to send additional routing data during a refresh per
 | 110 | Reserved |
 | 111 | Reserved |
 
-Initial Refresh Packet
-```
-----+------------------+-------------+----------------+----------+--------+----
-    | Interval Control | Data Offset | Refresh Offset | Reserved | Count  |
-    | 8 Bits           | 8 Bits      | 16 Bits        | 8 Bits   | 8 Bits |
-----+------------------+-------------+----------------+----------+--------+----
-```
-
-Where:
-* **Control**: See data transaction packet format.
-* **Interval Control**:
-  * Bits 0-2: Time units for Data Offset (see table above)
-  * Bits 3-6: Time units for Refresh Offset (see table above)
-  * Bits 7-8: Reserved
-* **Data Offset**: The amount of time from the end of the transmission of this packet to the first time slot for a Data transaction, in units specified by *interval control*. Must be at least greater than the time needed to complete the refresh cycle.
-* **Refresh Offset**: The amount of time from the end of the transmission of this packet to the next refresh cycle, in units specified by *interval control*.
-* **Reserved**: Discarded.
-* **Count**: The number of consecutive refresh packets following this one (unsigned byte).
-* **FCS**: See data transaction packet format.
-
-Additional refresh packet
+Additional refresh fragment, with MAC packet header and footer not shown:
 ```
 ----+--------------+----------+---------+----
     | Frame Length | Reserved | Payload |
@@ -210,35 +237,8 @@ A device, upon entering it's designated time slot, can transmit data to an upstr
 * **Data Transmission**: The device sends it's payload using the *Data Transmission* packet format. The device then turns on the receiver to wait for a response.
 * **ACK/Reverse Data Transmission** The receiving router/coordinator sends an acknowledgement using the *ACK* format, or alternatively the *ACK with Data* packet format if upstream data is available for the device. If the router/coordinator sent upstream data to the device, the router/coordinator turns on it's receiver and waits for a response.
 * **ACK** If the device received upstream data, it send back a final *ACK* to the router/coordinator, and resumes sleep.
-#### Packet Format
 
-| Three-Bit Code | Packet Type |
-| --- | --- |
-| 100 | Initial Refresh/Sync Data |
-| 011 | Additional Refresh/Sync Data |
-| 001 | Error |
-| 101 | Data Transmission |
-| 110 | Data ACK |
-| 111 | Data ACK w/ Transmission |
-| 010 | Reserved |
-
-The *Data transmission* and *ACK with Data* packets shall be formatted as follows:
-```
-+---------+---------+----------------+---------+
-| Control | Source  | Network Packet | FCS     |
-| 8 Bits  | 16 Bits | 56-250 Bytes   | 16 Bits |
-+---------+---------+----------------+---------+
-Where:
-```
-* **Control**
-  * Bits 0-2: Packet type, shown in table above.
-  * Bits 3-4: Protocol version, as of this draft 0.
-  * Bits 4-5: Reserved.
-* **Source** The address of the device that sent this packet. Not to be confused with the original source, which is ignored by the MAC layer.
-* **Network Packet** See the network packet structure.
-* **FCS** A verification mechanism calculated using a 16-bit CRC with the polynomial `x^16+x^12+x^5+1`. The calculation of this value shall include the entire packet structure, excluding the checksum itself.
-
-The *ACK* packet shall be formatted as follows:
+The *ACK* packet shall be formatted as follows, and shall not contain the MAC packet header and footer:
 ```
 +---------+---------+
 | Control | Source  |

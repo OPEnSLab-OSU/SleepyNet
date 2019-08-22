@@ -41,9 +41,9 @@ namespace LoomNet {
 		return false;
 	}
 
-	class Fragment {
+	class Packet {
 	public:
-		explicit Fragment(const PacketCtrl control, const uint16_t src_addr)
+		explicit Packet(const PacketCtrl control, const uint16_t src_addr)
 			: m_payload{} {
 			// set the control
 			m_payload[0] = control;
@@ -52,7 +52,7 @@ namespace LoomNet {
 			m_payload[2] = static_cast<uint8_t>(src_addr >> 8);
 		}
 
-		explicit Fragment(const uint8_t* raw_packet, const uint8_t max_length)
+		explicit Packet(const uint8_t* raw_packet, const uint8_t max_length)
 			: m_payload{} {
 			// check lengths are correct
 			if (max_length > sizeof(m_payload)) set_error();
@@ -90,22 +90,24 @@ namespace LoomNet {
 		}
 		// run this function right after the packet has been recieved to verify the packet
 		bool check_framecheck(const uint8_t endpos) { 
-			return calc_framecheck_global(m_payload, endpos) 
-				== (static_cast<uint16_t>(m_payload[endpos]) | static_cast<uint16_t>(m_payload[endpos + 1]) << 8);
+			return calc_framecheck_global(m_payload, endpos) == get_framecheck(endpos);
+		}
+		uint16_t get_framecheck(const uint8_t endpos) const {
+			return (static_cast<uint16_t>(m_payload[endpos]) | static_cast<uint16_t>(m_payload[endpos + 1]) << 8);
 		}
 
 	private:
 		uint8_t m_payload[255];
 	};
 
-	class DataFragment : public Fragment {
+	class DataPacket : public Packet {
 	public:
-		DataFragment(const uint16_t dst_addr, const uint16_t src_addr, const uint16_t orig_src_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length, const uint16_t next_addr)
-			: Fragment(PacketCtrl::DATA_TRANS, src_addr)
+		DataPacket(const uint16_t dst_addr, const uint16_t src_addr, const uint16_t orig_src_addr, const uint8_t id, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length, const uint16_t next_addr)
+			: Packet(PacketCtrl::DATA_TRANS, src_addr)
 			, m_next_hop_addr(next_addr) {
 			auto packet = get_write_start();
 			auto count = get_write_count();
-			const auto frag_len = length + 7;
+			const auto frag_len = length + 8;
 			// overflow check
 			if (frag_len > count) set_error();
 			else {
@@ -115,35 +117,39 @@ namespace LoomNet {
 				packet[2] = static_cast<uint8_t>(dst_addr >> 8);
 				packet[3] = static_cast<uint8_t>(orig_src_addr & 0xff);
 				packet[4] = static_cast<uint8_t>(orig_src_addr >> 8);
-				packet[5] = seq;
-				packet[6] = 0;
-				for (auto i = 0; i < length; i++) packet[i + 7] = raw_payload[i];
+				packet[5] = id;
+				packet[6] = seq;
+				packet[7] = 0;
+				for (auto i = 0; i < length; i++) packet[i + 8] = raw_payload[i];
 			}
 		}
 
-		DataFragment(const uint8_t* raw_packet, const uint8_t max_length)
-			: Fragment(raw_packet, max_length)
+		DataPacket(const uint8_t* raw_packet, const uint8_t max_length)
+			: Packet(raw_packet, max_length)
 			, m_next_hop_addr(ADDR_NONE) {}
 
 		uint16_t get_dst() const { return static_cast<uint16_t>(get_write_start()[1]) | static_cast<uint16_t>(get_write_start()[2]) << 8; }
 		uint16_t get_orig_src() const { return static_cast<uint16_t>(get_write_start()[3]) | static_cast<uint16_t>(get_write_start()[4]) << 8; }
-		uint8_t* get_payload() { return &(get_write_start()[7]); }
-		const uint8_t* get_payload() const { return &(get_write_start()[7]); }
-		uint8_t get_payload_length() const { const uint8_t num = get_write_start()[0]; return num >= 7 ? num - 7 : 0; }
-		uint8_t get_fragment_length() const { return get_payload_length() + 7; }
+		uint8_t get_rolling_id() const { return get_write_start()[5]; }
+		uint8_t get_seq() const { return get_write_start()[6]; }
+		uint8_t* get_payload() { return &(get_write_start()[8]); }
+		const uint8_t* get_payload() const { return &(get_write_start()[8]); }
+		uint8_t get_payload_length() const { const uint8_t num = get_write_start()[0]; return num >= 8 ? num - 8 : 0; }
+		uint8_t get_fragment_length() const { return get_payload_length() + 8; }
 		uint8_t get_packet_length() const { return get_fragment_length() + 5; }
 		void set_next_hop(const uint16_t next_hop) { m_next_hop_addr = next_hop; }
 		uint16_t get_next_hop() const { return m_next_hop_addr; }
 		void set_is_ack(bool is_ack) { is_ack ? set_control(PacketCtrl::DATA_ACK_W_DATA) : set_control(PacketCtrl::DATA_TRANS); }
+		uint16_t get_framecheck() const { return Packet::get_framecheck(static_cast<uint16_t>(get_fragment_length()) + 3); }
 
 	private:
 		uint16_t m_next_hop_addr;
 	};
 
-	class RefreshFragment : public Fragment {
+	class RefreshPacket : public Packet {
 	public:
-		RefreshFragment(const uint16_t src_addr, const TimeInterval data_interval, const TimeInterval refresh_interval, const uint8_t count)
-			: Fragment(PacketCtrl::REFRESH_INITIAL, src_addr) {
+		RefreshPacket(const uint16_t src_addr, const TimeInterval data_interval, const TimeInterval refresh_interval, const uint8_t count)
+			: Packet(PacketCtrl::REFRESH_INITIAL, src_addr) {
 			auto packet = get_write_start();
 			auto pkt_count = get_write_count();
 			// overflow check
@@ -160,8 +166,8 @@ namespace LoomNet {
 			}
 		}
 
-		explicit RefreshFragment(const uint8_t* raw_packet, const uint8_t max_length)
-			: Fragment(raw_packet, max_length) {}
+		explicit RefreshPacket(const uint8_t* raw_packet, const uint8_t max_length)
+			: Packet(raw_packet, max_length) {}
 
 		TimeInterval get_data_interval() const { return TimeInterval(get_write_start()[0] & static_cast<uint8_t>(0x07), get_write_start()[1]); }
 		TimeInterval get_refresh_interval() const { 
@@ -175,9 +181,21 @@ namespace LoomNet {
 		uint8_t get_packet_length() const { return get_fragment_length() + 5; }
 	};
 
-	class ACKFragment : public Fragment {
+	class ACKPacket : public Packet {
 	public:
-		explicit ACKFragment(const uint16_t src_addr)
-			: Fragment(PacketCtrl::DATA_ACK, src_addr) {}
+		explicit ACKPacket(const uint16_t src_addr)
+			: Packet(PacketCtrl::DATA_ACK, src_addr) {}
+	};
+
+	struct PacketFingerprint {
+		PacketFingerprint(const uint16_t addr, const uint8_t rolling_id)
+			: src_addr(addr)
+			, rolling_id(rolling_id) {}
+
+		PacketFingerprint(const DataPacket& packet)
+			: PacketFingerprint(packet.get_orig_src(), packet.get_rolling_id()) {}
+
+		const uint16_t src_addr;
+		const uint8_t rolling_id;
 	};
 }

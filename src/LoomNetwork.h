@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include "CircularBuffer.h"
 #include "LoomNetworkFragment.h"
 #include "LoomNetworkUtility.h"
@@ -12,7 +13,7 @@
  */
 
 namespace LoomNet {
-	template<size_t send_buffer = 16U, size_t recv_buffer = 16U>
+	template<size_t send_buffer = 16U, size_t recv_buffer = 16U, size_t fingerprint_buffer = 32U>
 	class Network {
 	public:
 		enum Status : uint8_t {
@@ -38,9 +39,11 @@ namespace LoomNet {
 						network)
 			, m_router(config.route_info)
 			, m_fail_count(0)
+			, m_rolling_id(0)
 			, m_addr(config.route_info.get_self_addr())
 			, m_buffer_send()
 			, m_buffer_recv()
+			, m_buffer_fingerprint()
 			, m_last_error(Error::NET_OK)
 			, m_status(Status::NET_SEND_RDY) {}
 
@@ -78,7 +81,7 @@ namespace LoomNet {
 					// send the first packet corresponding to the address indicated by the MAC layer
 					uint16_t addr = m_mac.get_cur_send_address();
 					auto iter = m_buffer_send.crange().begin();
-					auto end = m_buffer_send.crange().end();
+					const auto end = m_buffer_send.crange().end();
 					for (; iter != end; ++iter) {
 						if ((*iter).get_next_hop() == addr) break;
 					}
@@ -102,7 +105,7 @@ namespace LoomNet {
 			else if (mac_status == MAC::State::MAC_DATA_SEND_FAIL) {
 				// we always keep an open spot for a failed packet to pop back into
 				// if the packet doesn't insert for some reason, the network has broken
-				if (!m_buffer_send.emplace_back(m_mac.get_staged_packet()))
+				if (!m_buffer_send.emplace_front(m_mac.get_staged_packet()))
 					return m_halt_error(Error::SEND_BUF_FULL);
 				// tally up the number of broken packets, and if it's > 5 we need to reset
 				if (++m_fail_count >= 5) {
@@ -117,25 +120,46 @@ namespace LoomNet {
 			// if the mac has data ready to be copied, do that
 			else if (mac_status == MAC::State::MAC_DATA_RECV_RDY) {
 				// create a lookahead copy of the fragment
-				DataFragment recv_frag = m_mac.get_staged_packet();
-				// if we have a fragment that is addressed to us, add it to the recv buffer
-				if (recv_frag.get_dst() == m_addr) {
-					if (!m_buffer_recv.emplace_back(recv_frag))
-						return m_halt_error(Error::RECV_BUF_FULL);
-					// flip the recv ready bit
-					m_status |= Status::NET_RECV_RDY;
+				DataPacket recv_frag = m_mac.get_staged_packet();
+				// if the fingerprint of this packet is contained in our buffer, drop it as
+				// it's a repeat
+				const uint16_t framecheck = recv_frag.get_framecheck();
+				bool found = false;
+				for (const auto& elem : m_buffer_fingerprint.crange()) {
+					if (elem.src_addr == recv_frag.get_orig_src()
+						&& elem.rolling_id == recv_frag.get_rolling_id()) {
+						found = true;
+						break;
+					}
 				}
-				// else the packet needs to be routed
+				// if this packet isn't a repeat
+				if (!found) {
+					// add the framecheck to our fingerprinting buffer
+					if (m_buffer_fingerprint.full()) m_buffer_fingerprint.destroy_front();
+					m_buffer_fingerprint.emplace_back(recv_frag);
+					// if we have a fragment that is addressed to us, add it to the recv buffer
+					if (recv_frag.get_dst() == m_addr) {
+						if (!m_buffer_recv.emplace_front(recv_frag))
+							return m_halt_error(Error::RECV_BUF_FULL);
+						// flip the recv ready bit
+						m_status |= Status::NET_RECV_RDY;
+					}
+					// else the packet needs to be routed
+					else {
+						const uint16_t nexthop = m_router.route(recv_frag.get_dst());
+						if (nexthop == ADDR_ERROR || nexthop == ADDR_NONE)
+							return m_halt_error(Error::ROUTE_FAIL);
+						// set the next hop address and src
+						recv_frag.set_src(m_router.get_self_addr());
+						recv_frag.set_next_hop(nexthop);
+						// push the packet to the send buffer, tagging it with the next hop address
+						if (!m_buffer_send.emplace_back(recv_frag))
+							return m_halt_error(Error::SEND_BUF_FULL);
+					}
+				}
+				// TODO: remove
 				else {
-					const uint16_t nexthop = m_router.route(recv_frag.get_dst());
-					if (nexthop == ADDR_ERROR || nexthop == ADDR_NONE)
-						return m_halt_error(Error::ROUTE_FAIL);
-					// set the next hop address and src
-					recv_frag.set_src(m_router.get_self_addr());
-					recv_frag.set_next_hop(nexthop);
-					// push the packet to the send buffer, tagging it with the next hop address
-					if (!m_buffer_send.emplace_back(recv_frag))
-						return m_halt_error(Error::SEND_BUF_FULL);
+					std::cout << "Dropped packet!" << std::endl;
 				}
 			}
 			// throw an error if the MAC state is out of bounds
@@ -146,7 +170,7 @@ namespace LoomNet {
 			return m_status;
 		}
 
-		void app_send(const DataFragment& send) {
+		void app_send(const DataPacket& send) {
 			// push the send fragment into the buffer
 			m_buffer_send.emplace_back(send);
 			// if the send buffer is full, disallow further sending
@@ -159,6 +183,7 @@ namespace LoomNet {
 				dst_addr,
 				m_addr,
 				m_addr,
+				m_rolling_id,
 				seq,
 				raw_payload,
 				length,
@@ -166,11 +191,14 @@ namespace LoomNet {
 			);
 			// if the send buffer is full, disallow further sending
 			if (m_buffer_send.full()) m_status &= ~Status::NET_SEND_RDY;
+			// move to the next rolling ID
+			if (m_rolling_id == 255) m_rolling_id = 0;
+			else m_rolling_id++;
 		}
 
-		DataFragment app_recv() {
+		DataPacket app_recv() {
 			// create a copy of the last recieved object
-			const DataFragment frag(m_buffer_recv.front());
+			const DataPacket frag(m_buffer_recv.front());
 			// destroy the stored object
 			m_buffer_recv.destroy_front();
 			// if the buffer is emptey, tell the user that there's no more data
@@ -182,11 +210,13 @@ namespace LoomNet {
 		void reset() {
 			// reset MAC layer
 			m_mac.reset();
-			// set the fail count to zero
+			// set the fail count and rolling ID to zero
 			m_fail_count = 0;
+			m_rolling_id = 0;
 			// clear buffers
 			m_buffer_recv.reset();
 			m_buffer_send.reset();
+			m_buffer_fingerprint.reset();
 			// reset state and error
 			m_last_error = Error::NET_OK;
 			m_status = Status::NET_SEND_RDY;
@@ -216,11 +246,13 @@ namespace LoomNet {
 		Router m_router;
 
 		uint8_t m_fail_count;
+		uint8_t m_rolling_id;
 
 		const uint16_t m_addr;
 		// TODO: Implement in terms of a binary tree
-		CircularBuffer<DataFragment, send_buffer> m_buffer_send;
-		CircularBuffer<DataFragment, recv_buffer> m_buffer_recv;
+		CircularBuffer<DataPacket, send_buffer> m_buffer_send;
+		CircularBuffer<DataPacket, recv_buffer> m_buffer_recv;
+		CircularBuffer<PacketFingerprint, fingerprint_buffer> m_buffer_fingerprint;
 
 		Error m_last_error;
 		uint8_t m_status;

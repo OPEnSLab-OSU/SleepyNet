@@ -99,16 +99,17 @@ The state of the network stack shall be determined by the MAC layer. The network
 
 The network shall format it's data as follows (this data will be surrounded by the MAC layer data):
 ```
------+--------------+-------------+---------+----------+----------+---------+----
-     | Frame Length | Destination | Source  | Sequence | Reserved | Payload |
-     | 8 Bits       | 16 Bits     | 16 Bits | 8 bits   | 8 bits   | n bits  |
------+--------------+-------------+---------+----------+----------+---------+----
+-----+--------------+-------------+---------+------------+----------+----------+---------+----
+     | Frame Length | Destination | Source  | Rolling ID | Sequence | Reserved | Payload |
+     | 8 Bits       | 16 Bits     | 16 Bits | 8 bits     | 8 bits   | 8 bits   | n bits  |
+-----+--------------+-------------+---------+------------+----------+----------+---------+----
 ```
 Where:
 * **Frame Length**: The size of the network packet in bytes (Frame Length + Destination + Source + Reserved + Payload). Unsigned byte, can be no more than 255.
 * **Destination**: The 16-bit address of the final destination.
 * **Source**: The 16-bit address of the original source (not to be confused with the current source, which is handled in the MAC layer).
 * **Sequence**: The number of packets remaining in a sequence of fragments, indexed from zero (ex. A two fragment sequence would have sequence numbers 1 and then 0).
+* **Rolling ID**: To prevent packet duplication, the this field combined with the source address shall correspond to a unique packet on the network. This field may be sequential or randomly generated, but must be unique for the lifetime of the packet.
 * **Reserved**: Discard.
 * **Payload**: A sequence of data bytes (no larger than 246 bytes long).
 
@@ -215,7 +216,7 @@ Additional refresh fragment, with MAC packet header and footer not shown:
 ```
 
 Where:
-* **Frame Length**: The size of the refresh packet in bytes, not including the control frame. (Frame Length + Reserved + Payload + FCS) as an unsigned byte.
+* **Frame Length**: The size of the refresh packet in bytes, not including the control frame. (Frame Length + Rolling ID + Reserved + Payload + FCS) as an unsigned byte.
 * **Reserved**: Discard.
 * **Payload**: A sequence of data bytes (no longer than 251 bytes)
 

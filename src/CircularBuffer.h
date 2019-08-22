@@ -135,13 +135,13 @@ public:
 		size_t m_position;
 		size_t m_index;
 	public:
-		Iterator(array_t* _data, const size_t _position, const size_t _index) 
+		Iterator(array_t* _data, const size_t _position, const size_t index = 0) 
 			: m_data(_data)
 			, m_position(_position)
-			, m_index(_index) {}
+			, m_index(index) {}
 
 		T& operator*() { return *reinterpret_cast<T*>(&m_data[m_position]); }
-		Iterator& operator++() { m_position++; if (m_position >= max_size) m_position = 0; m_index++; return *this; }
+		Iterator& operator++() { if (++m_position >= max_size) m_position = 0; m_index++; return *this; }
 		bool operator!=(const Iterator& it) const { return m_index != it.m_index; }
 
 		friend class CircularBuffer<T, max_size>;
@@ -152,23 +152,23 @@ public:
 		size_t m_position;
 		size_t m_index;
 	public:
-		ConstIterator(const array_t* _data, const size_t _position, const size_t _index)
+		ConstIterator(const array_t* _data, const size_t _position, const size_t index = 0)
 			: m_data(_data)
 			, m_position(_position)
-			, m_index(_index) {}
+			, m_index(index) {}
 
 		const T& operator*() const { return *reinterpret_cast<const T*>(&m_data[m_position]); }
-		ConstIterator& operator++() { m_position++; if (m_position >= max_size) m_position = 0; m_index++; return *this; }
+		ConstIterator& operator++() { if (++m_position >= max_size) m_position = 0; m_index++; return *this; }
 		bool operator!=(const ConstIterator& it) const { return m_index != it.m_index; }
 
 		friend class CircularBuffer<T, max_size>;
 	};
 
-	Iterator begin() { return { m_array, m_start, 0 }; }
-	Iterator end() { return { m_array, m_start == 0 ? m_length : m_get_true_index(m_length, m_start), m_length }; }
+	Iterator begin() { return { m_array, m_start }; }
+	const Iterator end() { return { m_array, 0, m_length }; }
 
-	ConstIterator begin() const { return { m_array, m_start, 0 }; }
-	ConstIterator end() const { return { m_array, m_start == 0 ? m_length : m_get_true_index(m_length, m_start), m_length }; }
+	ConstIterator begin() const { return { m_array, m_start }; }
+	const ConstIterator end() const { return { m_array, 0, m_length }; }
 
 	const CircularBuffer<T, max_size>& crange() const noexcept { return *this; }
 

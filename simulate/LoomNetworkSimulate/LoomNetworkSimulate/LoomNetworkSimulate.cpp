@@ -125,7 +125,7 @@ public:
 							std::cout << " recieved: " << std::endl;
 						}
 						do {
-							const LoomNet::DataFragment& frag = devices[i].app_recv();
+							const LoomNet::DataPacket& frag = devices[i].app_recv();
 							const std::string payload(reinterpret_cast<const char*>(frag.get_payload()), frag.get_payload_length());
 							if (!quiet) std::cout << "		" << payload << std::endl;
 							// find the packet in the tracking table, and remove it
@@ -263,7 +263,9 @@ public:
 				airwaves = packet;
 				busy = true;
 			}
-			else std::cout << "								Dropped packet!" << std::endl;
+			else {
+				std::cout << "								Dropped packet!" << std::endl;
+			}
 		});
 		// every time any device reads from the network
 		sim_net.set_net_read([this](const bool clear) {
@@ -431,7 +433,7 @@ int main()
 			for (const auto dst : all_addrs) {
 				if (src != dst) {
 					char buf[16];
-					snprintf(buf, sizeof(buf), "0x%04X->%04X", src, dst);
+					snprintf(buf, sizeof(buf), "0x%04X->0x%04X", src, dst);
 					if (!network.send_data_and_verify(src, dst, std::string(buf))) {
 						std::cout << "Failed to send: " << src << "->" << dst << std::endl;
 						return false;
@@ -490,7 +492,7 @@ int main()
 		// get past the refresh cycle first
 		for (auto i = 0; i < 5; i++) {
 			if (!network.next_slot()) {
-				std::cout << "Single send prep failed" << std::endl;
+				std::cout << "Lossy single send prep failed" << std::endl;
 				return false;
 			}
 		}
@@ -523,7 +525,7 @@ int main()
 					for (auto i = 0; i < 4; i++) network.next_cycle();
 					// check if all the packets made it
 					if (network.pending_packet_count()) {
-						std::cout << "Single send failed to clear network" << std::endl;
+						std::cout << "Lossy send failed to clear network" << std::endl;
 						return false;
 					}
 				}

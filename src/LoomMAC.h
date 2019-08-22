@@ -127,7 +127,7 @@ namespace LoomNet {
 
 		uint16_t get_cur_send_address() const { return m_cur_send_addr; }
 
-		bool send_fragment(DataFragment frag) {
+		bool send_fragment(DataPacket frag) {
 			// sanity check
 			if (m_state == State::MAC_DATA_SEND_RDY && !m_staged) {
 				if (frag.get_next_hop() != m_cur_send_addr) return false;
@@ -158,9 +158,9 @@ namespace LoomNet {
 			return false;
 		}
 
-		DataFragment get_staged_packet() {
+		DataPacket get_staged_packet() {
 			if (m_staged) {
-				const DataFragment ret( m_staging.data(), static_cast<uint8_t>(m_staging.size()) );
+				const DataPacket ret( m_staging.data(), static_cast<uint8_t>(m_staging.size()) );
 				if (m_state == State::MAC_DATA_RECV_RDY) {
 					// next state!
 					if (m_send_type == SendType::MAC_ACK_WITH_DATA) {
@@ -182,7 +182,7 @@ namespace LoomNet {
 				m_staged = false;
 				return ret;
 			}
-			return { ADDR_ERROR, ADDR_ERROR, ADDR_ERROR, 0, nullptr, 0, ADDR_ERROR };
+			return { ADDR_ERROR, ADDR_ERROR, ADDR_ERROR, 0, 0, nullptr, 0, ADDR_ERROR };
 		}
 
 		void send_pass() {
@@ -282,7 +282,7 @@ namespace LoomNet {
 					if (get_packet_control(recv) == PacketCtrl::REFRESH_INITIAL
 						&& check_packet(recv, m_self_addr)) {
 						// get a copy of the fragment
-						const RefreshFragment ref_frag(recv.data(), static_cast<uint8_t>(recv.size()));
+						const RefreshPacket ref_frag(recv.data(), static_cast<uint8_t>(recv.size()));
 						// set the next data and refresh cycle based on the data
 						// TODO: Do things based off of m_next_data_cycle
 						m_next_data_cycle = ref_frag.get_data_interval() + time_now;
@@ -307,7 +307,7 @@ namespace LoomNet {
 				// TODO: exact timings
 				const TimeInterval next_data(TimeInterval::Unit::SECOND, REFRESH_CYCLE_SLOTS);
 				const TimeInterval next_refresh(TimeInterval::Unit::SECOND, slots_until_refresh);
-				const RefreshFragment frag(m_self_addr, next_data, next_refresh, 0 );
+				const RefreshPacket frag(m_self_addr, next_data, next_refresh, 0 );
 				std::array<uint8_t, 255> temp;
 				for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag[i];
 				m_network.net_write(temp);
@@ -327,7 +327,7 @@ namespace LoomNet {
 
 		void m_send_ack() {
 			// send a regular ACK packet
-			const ACKFragment frag(m_self_addr);
+			const ACKPacket frag(m_self_addr);
 			std::array<uint8_t, 255> temp;
 			for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag[i];
 			m_network.net_write(temp);

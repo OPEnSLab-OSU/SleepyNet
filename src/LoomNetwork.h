@@ -83,13 +83,13 @@ namespace LoomNet {
 					auto iter = m_buffer_send.crange().begin();
 					const auto end = m_buffer_send.crange().end();
 					for (; iter != end; ++iter) {
-						if ((*iter).get_next_hop() == addr) break;
+						if ((*iter).first == addr) break;
 					}
 					// if there isn't any, send none and move on
 					if (!(iter != end)) m_mac.send_pass();
 					else {
 						// send, and if send succeded, destroy the item
-						if (m_mac.send_fragment(*iter)) {
+						if (m_mac.send_fragment((*iter).second)) {
 							m_buffer_send.remove(iter);
 							// hey there's a new spot!
 							m_status |= Status::NET_SEND_RDY;
@@ -105,29 +105,22 @@ namespace LoomNet {
 			else if (mac_status == MAC::State::MAC_DATA_SEND_FAIL) {
 				// we always keep an open spot for a failed packet to pop back into
 				// if the packet doesn't insert for some reason, the network has broken
-				if (!m_buffer_send.emplace_front(m_mac.get_staged_packet()))
+				if (!m_buffer_send.emplace_front(m_mac.get_cur_send_address(), m_mac.get_staged_packet()))
 					return m_halt_error(Error::SEND_BUF_FULL);
-				// tally up the number of broken packets, and if it's > 5 we need to reset
-				if (++m_fail_count >= 5) {
-					// reset the MAC layer
-					m_mac.reset();
-					// reset all of our values, except for the buffers which need to be kept
-					// so we can continue transmitting
-					m_fail_count = 0;
-					m_status = Status::NET_SEND_RDY;
-				}
+				// TODO: count failures to transmit somehow? not here since this can be triggered by an end device not starting the handshake
 			}
 			// if the mac has data ready to be copied, do that
 			else if (mac_status == MAC::State::MAC_DATA_RECV_RDY) {
 				// create a lookahead copy of the fragment
-				DataPacket recv_frag = m_mac.get_staged_packet();
+				Packet recv_frag = m_mac.get_staged_packet();
+				DataPacket& data_frag = recv_frag.as<DataPacket>();
 				// if the fingerprint of this packet is contained in our buffer, drop it as
 				// it's a repeat
-				const uint16_t framecheck = recv_frag.get_framecheck();
+				const uint16_t framecheck = recv_frag.calc_framecheck();
 				bool found = false;
 				for (const auto& elem : m_buffer_fingerprint.crange()) {
-					if (elem.src_addr == recv_frag.get_orig_src()
-						&& elem.rolling_id == recv_frag.get_rolling_id()) {
+					if (elem.src_addr == data_frag.get_orig_src()
+						&& elem.rolling_id == data_frag.get_rolling_id()) {
 						found = true;
 						break;
 					}
@@ -136,30 +129,27 @@ namespace LoomNet {
 				if (!found) {
 					// add the framecheck to our fingerprinting buffer
 					if (m_buffer_fingerprint.full()) m_buffer_fingerprint.destroy_front();
-					m_buffer_fingerprint.emplace_back(recv_frag);
+					m_buffer_fingerprint.emplace_back(data_frag);
 					// if we have a fragment that is addressed to us, add it to the recv buffer
-					if (recv_frag.get_dst() == m_addr) {
-						if (!m_buffer_recv.emplace_front(recv_frag))
+					if (data_frag.get_dst() == m_addr) {
+						if (!m_buffer_recv.emplace_front(data_frag))
 							return m_halt_error(Error::RECV_BUF_FULL);
 						// flip the recv ready bit
 						m_status |= Status::NET_RECV_RDY;
 					}
 					// else the packet needs to be routed
 					else {
-						const uint16_t nexthop = m_router.route(recv_frag.get_dst());
+						const uint16_t nexthop = m_router.route(data_frag.get_dst());
 						if (nexthop == ADDR_ERROR || nexthop == ADDR_NONE)
 							return m_halt_error(Error::ROUTE_FAIL);
-						// set the next hop address and src
-						recv_frag.set_src(m_router.get_self_addr());
-						recv_frag.set_next_hop(nexthop);
 						// push the packet to the send buffer, tagging it with the next hop address
-						if (!m_buffer_send.emplace_back(recv_frag))
+						if (!m_buffer_send.emplace_back(nexthop, data_frag))
 							return m_halt_error(Error::SEND_BUF_FULL);
 					}
 				}
 				// TODO: remove
 				else {
-					std::cout << "Dropped packet!" << std::endl;
+					std::cout << "					Dropped duplicate!" << std::endl;
 				}
 			}
 			// throw an error if the MAC state is out of bounds
@@ -170,24 +160,29 @@ namespace LoomNet {
 			return m_status;
 		}
 
-		void app_send(const DataPacket& send) {
+		void app_send(const Packet& send) {
 			// push the send fragment into the buffer
-			m_buffer_send.emplace_back(send);
+			m_buffer_send.emplace_back(m_router.route(send.as<DataPacket>().get_dst()), send);
 			// if the send buffer is full, disallow further sending
 			if (m_buffer_send.size() - 1 == m_buffer_send.allocated()) m_status &= ~Status::NET_SEND_RDY;
+			// move to the next rolling ID
+			if (m_rolling_id == 255) m_rolling_id = 0;
+			else m_rolling_id++;
 		}
 
 		void app_send(const uint16_t dst_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length) {
 			// push the send fragment into the buffer
 			m_buffer_send.emplace_back(
-				dst_addr,
-				m_addr,
-				m_addr,
-				m_rolling_id,
-				seq,
-				raw_payload,
-				length,
-				m_router.route(dst_addr)
+				m_router.route(dst_addr),
+				DataPacket::Factory(
+					dst_addr,
+					m_addr,
+					m_addr,
+					m_rolling_id,
+					seq,
+					raw_payload,
+					length
+				)
 			);
 			// if the send buffer is full, disallow further sending
 			if (m_buffer_send.full()) m_status &= ~Status::NET_SEND_RDY;
@@ -196,9 +191,9 @@ namespace LoomNet {
 			else m_rolling_id++;
 		}
 
-		DataPacket app_recv() {
+		Packet app_recv() {
 			// create a copy of the last recieved object
-			const DataPacket frag(m_buffer_recv.front());
+			const Packet frag(m_buffer_recv.front());
 			// destroy the stored object
 			m_buffer_recv.destroy_front();
 			// if the buffer is emptey, tell the user that there's no more data
@@ -250,8 +245,8 @@ namespace LoomNet {
 
 		const uint16_t m_addr;
 		// TODO: Implement in terms of a binary tree
-		CircularBuffer<DataPacket, send_buffer> m_buffer_send;
-		CircularBuffer<DataPacket, recv_buffer> m_buffer_recv;
+		CircularBuffer<std::pair<uint16_t, Packet>, send_buffer> m_buffer_send;
+		CircularBuffer<Packet, recv_buffer> m_buffer_recv;
 		CircularBuffer<PacketFingerprint, fingerprint_buffer> m_buffer_fingerprint;
 
 		Error m_last_error;

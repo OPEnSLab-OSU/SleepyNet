@@ -25,6 +25,7 @@ namespace LoomNet {
 		DATA_TRANS = 0b101 | (PROTOCOL_VER << 2),
 		DATA_ACK = 0b110 | (PROTOCOL_VER << 2),
 		DATA_ACK_W_DATA = 0b111 | (PROTOCOL_VER << 2),
+		NONE = 0
 	};
 
 	enum class DeviceType {
@@ -199,7 +200,7 @@ namespace LoomNet {
 	// debug stuff for simulation
 	// TODO: replace this stuff with real numbers
 	constexpr uint8_t CYCLES_PER_BATCH = 5;
-	constexpr uint8_t LOOPS_PER_SLOT = 5;
+	constexpr uint8_t LOOPS_PER_SLOT = 10;
 	constexpr uint8_t CYCLE_GAP = 2;
 	const TimeInterval SLOT_LENGTH(TimeInterval::Unit::SECOND, 1);
 	constexpr uint8_t BATCH_GAP = 5;

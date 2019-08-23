@@ -106,7 +106,7 @@ public:
 		// iterate through each element until all of them are asleep, then move to the next slot
 		bool all_sleep;
 		auto iterations = 0;
-		do {
+		for (; iterations < LoomNet::LOOPS_PER_SLOT; iterations++) {
 			all_sleep = true;
 			if (!quiet) std::cout << "	Iteration " << iterations << ":" << std::endl;
 			for (uint8_t i = 0; i < devices.size(); i++) {
@@ -125,7 +125,8 @@ public:
 							std::cout << " recieved: " << std::endl;
 						}
 						do {
-							const LoomNet::DataPacket& frag = devices[i].app_recv();
+							const LoomNet::Packet& buf = devices[i].app_recv();
+							const LoomNet::DataPacket& frag = buf.as<LoomNet::DataPacket>();
 							const std::string payload(reinterpret_cast<const char*>(frag.get_payload()), frag.get_payload_length());
 							if (!quiet) std::cout << "		" << payload << std::endl;
 							// find the packet in the tracking table, and remove it
@@ -163,11 +164,7 @@ public:
 					else all_sleep = false;
 				}
 			}
-			iterations++;
-		} while (!all_sleep && iterations < 50);
-		if (iterations >= 50) {
-			std::cout << "System hung!" << std::endl;
-			return false;
+			if (all_sleep) break;
 		}
 		if (!quiet) std::cout << "	Took " << iterations << " iterations." << std::endl;
 		// next slot!
@@ -230,6 +227,8 @@ public:
 		send_track.clear();
 		// every time the device writes to the network
 		sim_net.set_net_write([this](std::array<uint8_t, 255> packet) {
+			const uint16_t src_addr = static_cast<uint16_t>(packet[1]) | (static_cast<uint16_t>(packet[2]) << 8);
+			// std::cout << "		Transmission from: 0x" << std::hex << std::setfill('0') << std::setw(4) << src_addr << std::endl;
 			if (busy) {
 				std::cout << "		Collision!" << std::endl;
 			}
@@ -412,7 +411,7 @@ int main()
 
 		// simulation one: loop for awhile, make sure nothing weird happens
 		for (auto i = 0; i < 1000; i++) {
-			if (!network.next_slot(true)) {
+			if (!network.next_slot(false)) {
 				std::cout << "Idle test failed!" << std::endl;
 				return false;
 			}
@@ -423,7 +422,7 @@ int main()
 		// simuation two: single send/recieve combination to every device
 		// get past the refresh cycle first
 		for (auto i = 0; i < 5; i++) {
-			if (!network.next_slot()) {
+			if (!network.next_slot(true)) {
 				std::cout << "Single send prep failed" << std::endl;
 				return false;
 			}
@@ -449,7 +448,7 @@ int main()
 							}
 						}
 						// next cycle!
-						network.next_cycle();
+						network.next_cycle(true);
 					}
 					// run a few more times to clean out the residual packets
 					for (auto i = 0; i < 4; i++) network.next_cycle();

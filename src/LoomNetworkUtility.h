@@ -67,7 +67,9 @@ namespace LoomNet {
 
 		const TimeInterval operator-(const TimeInterval& rhs) const {
 			const std::array<TimeInterval, 2> & times = m_match_time(rhs);
-			return { times[0].get_unit(), times[0].get_time() - times[1].get_time() };
+			return  times[0].get_time() > times[1].get_time() 
+				? TimeInterval{ times[0].get_unit(), times[0].get_time() - times[1].get_time() } 
+				: TimeInterval{ Unit::NONE, 0 };
 		}
 
 		const TimeInterval operator*(const uint32_t num) const { return { m_unit, m_time * num }; }
@@ -109,6 +111,7 @@ namespace LoomNet {
 
 		const Unit get_unit() const { return m_unit; }
 		const uint32_t get_time() const { return m_time; }
+		const bool is_none() const { return m_unit == Unit::NONE; }
 
 	private:
 		std::array<TimeInterval, 2> m_match_time(const TimeInterval & rhs) const {

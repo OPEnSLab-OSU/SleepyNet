@@ -52,9 +52,8 @@ namespace LoomNet {
 			, m_time_idle_start(TimeInterval::NONE, 0)
 			, m_staging(PacketCtrl::NONE, ADDR_NONE)
 			, m_staged(false)
-			, m_last_refresh_interval(TimeInterval::NONE, 0)
-			, m_last_data_interval(TimeInterval::NONE, 0)
-			, m_last_refresh_stamp(TimeInterval::NONE, 0)
+			, m_next_refresh(TimeInterval::NONE, 0)
+			, m_next_data(TimeInterval::NONE, 0)
 			, m_network(network)
 			, m_self_addr(self_addr)
 			, m_self_type(self_type) {}
@@ -74,9 +73,8 @@ namespace LoomNet {
 			m_last_error = Error::MAC_OK;
 			m_staged = false;
 			m_staging = Packet(PacketCtrl::NONE, ADDR_NONE);
-			m_last_refresh_interval = TIME_NONE;
-			m_last_data_interval = TIME_NONE;
-			m_last_refresh_stamp = TIME_NONE;
+			m_next_refresh = TIME_NONE;
+			m_next_data = TIME_NONE;
 			m_time_idle_start = TIME_NONE;
 			m_cur_send_addr = ADDR_NONE;
 			m_slot.reset();
@@ -112,24 +110,21 @@ namespace LoomNet {
 		TimeInterval sleep_next_wake_time() const {
 			const Slotter::State state = m_slot.get_state();
 			const TimeInterval time(TimeInterval::SECOND, m_network.get_time());
-			if (state == Slotter::State::SLOT_WAIT_REFRESH) {
-				if (m_last_refresh_interval == TIME_NONE) return TIME_NONE;
-				const TimeInterval refresh_time = m_last_refresh_interval + m_last_refresh_stamp;
-				return refresh_time > time
-					? refresh_time - time
-					: TIME_NONE;
-			}
+			if (state == Slotter::State::SLOT_WAIT_REFRESH)
+				return  m_next_refresh - time;
 				
 			// else if it's the first cycle, we have to account for synchronizing the data
 			// cycle
-			else if ((state == Slotter::State::SLOT_RECV_W_SYNC || state == Slotter::State::SLOT_SEND_W_SYNC) && m_last_refresh_stamp != TIME_NONE) {
-				const TimeInterval data_time = m_last_data_interval + m_last_refresh_stamp;
-				return data_time > time
-					? data_time - time + TimeInterval(TimeInterval::SECOND, m_slot.get_slot_wait())
-					: time + TimeInterval(TimeInterval::SECOND, m_slot.get_slot_wait());
+			else if ((state == Slotter::State::SLOT_RECV_W_SYNC || state == Slotter::State::SLOT_SEND_W_SYNC) && !m_next_data.is_none()) {
+				return m_next_data > time
+					? m_next_data - time + TimeInterval(TimeInterval::SECOND, m_slot.get_slot_wait() * LOOPS_PER_SLOT)
+					: time + TimeInterval(TimeInterval::SECOND, m_slot.get_slot_wait() * LOOPS_PER_SLOT);
 			}
 			else
-				return { TimeInterval::Unit::SECOND, m_slot.get_slot_wait() };
+				return m_time_idle_start
+				// add one slot for the current slot, then subtract time to get rid of part of it
+					+ TimeInterval(TimeInterval::Unit::SECOND, static_cast<uint32_t>((m_slot.get_slot_wait() + 1) * LOOPS_PER_SLOT)) 
+					- time;
 		}
 
 		uint16_t get_cur_send_address() const { return m_cur_send_addr; }
@@ -262,7 +257,7 @@ namespace LoomNet {
 					// check the timeout
 					// TODO: Implement in terms of real time units
 					const TimeInterval delta = TimeInterval(TimeInterval::SECOND, m_network.get_time()) - m_time_idle_start;
-					if (delta.get_time() >= LOOPS_PER_SLOT) {
+					if (delta.get_time() >= LOOPS_PER_SLOT / 2) {
 						// I suppose you have nothing to say for yourself
 						// very well
 						m_send_type = SendType::NONE;
@@ -280,13 +275,14 @@ namespace LoomNet {
 				+ BATCH_GAP + REFRESH_CYCLE_SLOTS;
 			// if we're a router or end device, just check and see if anyone has transmitted a signal
 			const TimeInterval time_now(TimeInterval::SECOND, m_network.get_time());
+			// and if we haven't already (this should only happen on first power on) set the idle timestamp
+			if (m_time_idle_start.is_none()) 
+				m_time_idle_start = time_now;
 			if (m_self_type != DeviceType::COORDINATOR) {
 				// check our "network"
 				const std::array<uint8_t, 255> & buf = m_network.net_read(false);
 				const Packet recv(buf.data(), static_cast<uint8_t>(buf.size()));
 				if (recv.get_control() != PacketCtrl::NONE) {
-					// reset the idle counter
-					m_time_idle_start = TIME_NONE;
 					// guess we got a refresh packet!
 					// ignore everything in it for now, we'll deal with timing stuff later
 					// TODO: timing stuff
@@ -298,9 +294,8 @@ namespace LoomNet {
 						const RefreshPacket& ref_frag = recv.as<RefreshPacket>();
 						// set the next data and refresh cycle based on the data
 						// TODO: Do things based off of m_next_data_cycle
-						m_last_data_interval = ref_frag.get_data_interval();
-						m_last_refresh_interval = ref_frag.get_refresh_interval();
-						m_last_refresh_stamp = time_now;
+						m_next_data = ref_frag.get_data_interval() + time_now;
+						m_next_refresh = ref_frag.get_refresh_interval() + time_now;
 						m_state = State::MAC_SLEEP_RDY;
 						// increment the slotter state, if we haven't already via sleep_wake_ack
 						if (m_slot.get_state() == Slotter::State::SLOT_WAIT_REFRESH)
@@ -311,15 +306,20 @@ namespace LoomNet {
 				// if it's been over the reasonable number of slots, fail
 				else {
 					const TimeInterval delta = TimeInterval(TimeInterval::SECOND, m_network.get_time()) - m_time_idle_start;
-					if (m_last_refresh_interval == TIME_NONE
-						&& delta.get_time() >= slots_until_refresh + REFRESH_CYCLE_SLOTS) {
-						// first refresh didn't work, so hard fail
-						m_state = State::MAC_CLOSED;
-						m_last_error = Error::REFRESH_TIMEOUT;
+					if (m_next_refresh.is_none()) {
+						if (delta.get_time() >= (slots_until_refresh + REFRESH_CYCLE_SLOTS) * LOOPS_PER_SLOT) {
+							// first refresh didn't work, so hard fail
+							m_state = State::MAC_CLOSED;
+							m_last_error = Error::REFRESH_TIMEOUT;
+						}
 					}
-					else if (delta.get_time() >= REFRESH_CYCLE_SLOTS) {
+					else if (delta.get_time() >= REFRESH_CYCLE_SLOTS * LOOPS_PER_SLOT - (LOOPS_PER_SLOT / 2)) {
 						// no refresh, but I guess we can just guess the values we got are still correct
-						m_last_refresh_stamp = time_now;
+						// create values based on preconfigured settings and previous timings
+						m_next_data = time_now + TimeInterval(TimeInterval::SECOND, (LOOPS_PER_SLOT / 2));
+						// subtract what we've already waited from the total slots until refersh
+						const uint32_t next_refresh_relative = (slots_until_refresh - REFRESH_CYCLE_SLOTS) * LOOPS_PER_SLOT + LOOPS_PER_SLOT / 2;
+						m_next_refresh = time_now + TimeInterval(TimeInterval::SECOND, next_refresh_relative);
 						m_state = State::MAC_SLEEP_RDY;
 					}
 				}
@@ -328,15 +328,20 @@ namespace LoomNet {
 			else {
 				// write to the network
 				// TODO: exact timings
-				m_last_data_interval = TimeInterval(TimeInterval::Unit::SECOND, REFRESH_CYCLE_SLOTS);
-				m_last_refresh_interval = TimeInterval(TimeInterval::Unit::SECOND, slots_until_refresh);
-				m_last_refresh_stamp = time_now;
-				Packet frag = RefreshPacket::Factory(m_self_addr, m_last_data_interval, m_last_refresh_interval, 0);
+				// subtract one here because the coordinator transmits in a different loop than the devices recieve
+				const TimeInterval next_data_relative(TimeInterval::Unit::SECOND, REFRESH_CYCLE_SLOTS * LOOPS_PER_SLOT);
+				const TimeInterval next_refresh_relative(TimeInterval::Unit::SECOND, slots_until_refresh * LOOPS_PER_SLOT);
+				Packet frag = RefreshPacket::Factory(m_self_addr, 
+					next_data_relative - TimeInterval(TimeInterval::SECOND, 1), 
+					next_refresh_relative - TimeInterval(TimeInterval::SECOND, 1), 
+					0);
 				frag.set_framecheck();
 				std::array<uint8_t, 255> temp;
 				for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag.get_raw()[i];
 				m_network.net_write(temp);
 				// next state!
+				m_next_data = next_data_relative + time_now;
+				m_next_refresh = next_refresh_relative + time_now;
 				m_state = State::MAC_SLEEP_RDY;
 				// increment the slotter state, if we haven't already via sleep_wake_ack
 				if (m_slot.get_state() == Slotter::State::SLOT_WAIT_REFRESH)
@@ -364,9 +369,8 @@ namespace LoomNet {
 		TimeInterval m_time_idle_start;
 		Packet m_staging;
 		bool m_staged;
-		TimeInterval m_last_refresh_interval;
-		TimeInterval m_last_data_interval;
-		TimeInterval m_last_refresh_stamp;
+		TimeInterval m_next_refresh;
+		TimeInterval m_next_data;
 		const uint16_t m_self_addr;
 		const DeviceType m_self_type;
 		// variables used for simulation

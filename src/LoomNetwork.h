@@ -38,7 +38,6 @@ namespace LoomNet {
 						config.slot_info, 
 						network)
 			, m_router(config.route_info)
-			, m_fail_count(0)
 			, m_rolling_id(0)
 			, m_addr(config.route_info.get_self_addr())
 			, m_buffer_send()
@@ -149,7 +148,7 @@ namespace LoomNet {
 				}
 				// TODO: remove
 				else {
-					std::cout << "					Dropped duplicate!" << std::endl;
+					// std::cout << "					Dropped duplicate!" << std::endl;
 				}
 			}
 			// throw an error if the MAC state is out of bounds
@@ -205,8 +204,7 @@ namespace LoomNet {
 		void reset() {
 			// reset MAC layer
 			m_mac.reset();
-			// set the fail count and rolling ID to zero
-			m_fail_count = 0;
+			// set the rolling ID to zero
 			m_rolling_id = 0;
 			// clear buffers
 			m_buffer_recv.reset();
@@ -240,7 +238,6 @@ namespace LoomNet {
 		MAC m_mac;
 		Router m_router;
 
-		uint8_t m_fail_count;
 		uint8_t m_rolling_id;
 
 		const uint16_t m_addr;

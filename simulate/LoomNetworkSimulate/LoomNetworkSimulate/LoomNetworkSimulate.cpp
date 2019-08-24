@@ -70,6 +70,7 @@ public:
 		, next_wake_times{ 0 }
 		, sim_net()
 		, cur_slot(0)
+		, cur_loop(0)
 		, send_track()
 		, rand_engine(std::random_device()())
 	{
@@ -83,6 +84,7 @@ public:
 			return false;
 		}
 		airwaves.fill(0);
+		cur_loop = 0;
 		// increment all the slot time trackers in the send tracking hash table
 		for (auto& elem : send_track)
 			std::get<2>(elem.second)++;
@@ -91,24 +93,24 @@ public:
 		if (!quiet) std::cout << "	Woke: ";
 		auto woke_count = 0;
 		for (uint8_t o = 0; o < devices.size(); o++) {
-			if (cur_slot > next_wake_times[o]) {
-				next_wake_times[o]++;
-				devices[o].net_sleep_wake_ack();
-				woke_count++;
-				if (!quiet) std::cout << "0x" << std::hex << std::setfill('0') << std::setw(4) << devices[o].get_router().get_self_addr() << ", ";
+			if (devices[o].get_status() & NetStatus::NET_SLEEP_RDY) {
+				if (cur_slot * LoomNet::LOOPS_PER_SLOT >= next_wake_times[o]) {
+					devices[o].net_sleep_wake_ack();
+					woke_count++;
+					if (!quiet) std::cout << "0x" << std::hex << std::setfill('0') << std::setw(4) << devices[o].get_router().get_self_addr() << ", ";
+				}
 			}
 		}
 		if (!quiet) std::cout << std::endl;
-		if (woke_count != 2 && woke_count != 16 && woke_count != 0) {
+		if (woke_count != 2 && woke_count != 16 && woke_count != 0 && woke_count != 15) {
 			std::cout << "Devices out of sync!" << std::endl;
 			return false;
 		}
 		// iterate through each element until all of them are asleep, then move to the next slot
 		bool all_sleep;
-		auto iterations = 0;
-		for (; iterations < LoomNet::LOOPS_PER_SLOT; iterations++) {
+		for (; cur_loop < LoomNet::LOOPS_PER_SLOT; cur_loop++) {
 			all_sleep = true;
-			if (!quiet) std::cout << "	Iteration " << iterations << ":" << std::endl;
+			if (!quiet) std::cout << "	Iteration " << cur_loop << ":" << std::endl;
 			for (uint8_t i = 0; i < devices.size(); i++) {
 				// if the device is awake
 				const uint8_t status = devices[i].get_status();
@@ -160,13 +162,13 @@ public:
 					if (!quiet) std::cout << "		Status of 0x" << std::hex << std::setfill('0') << std::setw(4) << devices[i].get_router().get_self_addr() << ": " << std::bitset<8>(devices[i].get_status()) << std::endl;
 					// if it wants to go to sleep now, add the time to the wake times
 					if (new_status & NetStatus::NET_SLEEP_RDY)
-						next_wake_times[i] += devices[i].net_sleep_next_wake_time().get_time();
+						next_wake_times[i] = devices[i].net_sleep_next_wake_time().get_time() + cur_slot * LoomNet::LOOPS_PER_SLOT + cur_loop;
 					else all_sleep = false;
 				}
 			}
 			if (all_sleep) break;
 		}
-		if (!quiet) std::cout << "	Took " << iterations << " iterations." << std::endl;
+		if (!quiet) std::cout << "	Took " << cur_loop << " iterations." << std::endl;
 		// next slot!
 		cur_slot++;
 		return true;
@@ -224,6 +226,7 @@ public:
 		busy = false;
 		next_wake_times.fill(0);
 		cur_slot = 0;
+		cur_loop = 0;
 		send_track.clear();
 		// every time the device writes to the network
 		sim_net.set_net_write([this](std::array<uint8_t, 255> packet) {
@@ -246,13 +249,13 @@ public:
 			return copy;
 			});
 		// get the current time as the current slot
-		sim_net.set_get_time([this]() { return cur_slot; });
+		sim_net.set_get_time([this]() { return cur_slot * LoomNet::LOOPS_PER_SLOT + cur_loop; });
 	}
 
 	void enable_lossy_network(int prob) {
 		// every time the device writes to the network
 		sim_net.set_net_write([this, prob](std::array<uint8_t, 255> packet) {
-			std::cout << "		Transmission from: 0x" << std::hex << std::setfill('0') << std::setw(4) << (static_cast<uint16_t>(packet[1]) | static_cast<uint16_t>(packet[2]) << 8) << std::endl;
+			// std::cout << "		Transmission from: 0x" << std::hex << std::setfill('0') << std::setw(4) << (static_cast<uint16_t>(packet[1]) | static_cast<uint16_t>(packet[2]) << 8) << std::endl;
 			if (busy) {
 				std::cout << "		Collision!" << std::endl;
 			}
@@ -263,7 +266,7 @@ public:
 				busy = true;
 			}
 			else {
-				std::cout << "								Dropped packet!" << std::endl;
+				// std::cout << "								Dropped packet!" << std::endl;
 			}
 		});
 		// every time any device reads from the network
@@ -276,7 +279,7 @@ public:
 			return copy;
 		});
 		// get the current time as the current slot
-		sim_net.set_get_time([this]() { return cur_slot; });
+		sim_net.set_get_time([this]() { return cur_slot * LoomNet::LOOPS_PER_SLOT + cur_loop; });
 	}
 
 	size_t pending_packet_count() const { return send_track.size(); }
@@ -287,6 +290,7 @@ public:
 	std::array<unsigned, 16> next_wake_times{ 0 };
 	LoomNet::NetworkSim sim_net;
 	size_t cur_slot;
+	size_t cur_loop;
 	std::multimap<uint16_t, NetTrack> send_track;
 	std::default_random_engine rand_engine;
 };
@@ -411,7 +415,7 @@ int main()
 
 		// simulation one: loop for awhile, make sure nothing weird happens
 		for (auto i = 0; i < 1000; i++) {
-			if (!network.next_slot(false)) {
+			if (!network.next_slot(true)) {
 				std::cout << "Idle test failed!" << std::endl;
 				return false;
 			}
@@ -464,25 +468,27 @@ int main()
 		std::cout << "Begin no coordinator test:" << std::endl;
 		network.reset();
 		// simuation three: no coordinator, devices eventually just error out
-		auto i = 0;
-		for (; i < 1000; i++) {
+		for (; network.cur_slot < 1000; network.cur_slot++) {
 			bool all_closed = true;
-			for (auto& d : network.devices) {
-				if (d.get_router().get_device_type() != DeviceType::COORDINATOR) {
-					const auto status = d.net_update();
-					if (status & TestNetwork::NetStatus::NET_SLEEP_RDY) {
-						std::cout << "No coordinator test failed on address: 0x" << std::hex << std::setfill('0') << std::setw(4) << d.get_router().get_self_addr() << std::endl;
-						return false;
+			for (network.cur_loop = 0; network.cur_loop < LoomNet::LOOPS_PER_SLOT; network.cur_loop++) {
+				for (auto& d : network.devices) {
+					if (d.get_router().get_device_type() != DeviceType::COORDINATOR) {
+						const auto status = d.net_update();
+						if (status & TestNetwork::NetStatus::NET_SLEEP_RDY) {
+							std::cout << "No coordinator test failed on address: 0x" << std::hex << std::setfill('0') << std::setw(4) << d.get_router().get_self_addr() << std::endl;
+							return false;
+						}
+						all_closed &= (status == TestNetwork::NetStatus::NET_CLOSED);
 					}
-					all_closed &= (status == TestNetwork::NetStatus::NET_CLOSED);
+				}
+				if (all_closed) {
+					std::cout << "No coordinator test passed in " << std::dec << network.cur_slot << " slots" << std::endl;
+					break;
 				}
 			}
-			if (all_closed) {
-				std::cout << "No coordinator test passed in " << std::dec << i << " slots" << std::endl;
-				break;
-			}
+			if (all_closed) break;
 		}
-		if (i == 1000) std::cout << "No coordinator test failed!" << std::endl;
+		if (network.cur_slot == 1000) std::cout << "No coordinator test failed!" << std::endl;
 		std::cout << "End no coordinator test" << std::endl;
 
 		// simulation four: same as simulation two, but packets drop randomly inside the network
@@ -518,10 +524,10 @@ int main()
 							}
 						}
 						// next cycle!
-						network.next_cycle(false);
+						network.next_cycle(true);
 					}
 					// run a few more times to clean out the residual packets
-					for (auto i = 0; i < 4; i++) network.next_cycle();
+					for (auto i = 0; i < 10; i++) network.next_cycle(true);
 					// check if all the packets made it
 					if (network.pending_packet_count()) {
 						std::cout << "Lossy send failed to clear network" << std::endl;

@@ -60,31 +60,39 @@ namespace LoomNet {
 				m_cur_device = 0;
 			}
 			// else if we were waiting to recieve, start waiting to send if we are out of children
-			else if ((m_state == State::SLOT_RECV || m_state == State::SLOT_RECV_W_SYNC) && ++m_cur_device == m_recv_count) {
-				if (m_send_slot != SLOT_NONE) m_state = State::SLOT_SEND;
-				// else if we're a coordinator, we need to also increment the cycle count since we don't
-				// have a sending phase
-				else {
+			else if (m_state == State::SLOT_RECV || m_state == State::SLOT_RECV_W_SYNC) {
+				if (++m_cur_device == m_recv_count) {
+					if (m_send_slot != SLOT_NONE) m_state = State::SLOT_SEND;
+					// else if we're a coordinator, we need to also increment the cycle count since we don't
+					// have a sending phase
+					else {
+						if (++m_cur_cycle == m_cycles_per_refresh - 1) {
+							m_cur_cycle = 0;
+							m_state = State::SLOT_WAIT_REFRESH;
+						}
+						else m_state = State::SLOT_RECV;
+					}
+					m_cur_device = 0;
+				}
+				// else if the state is in a SYNC state, move it to a regular state
+				else if (m_state == State::SLOT_RECV_W_SYNC) m_state = State::SLOT_RECV;
+			}				
+			// else we were waiting to transmit, so move to the next cycle
+			else if (m_state == State::SLOT_SEND || m_state == State::SLOT_SEND_W_SYNC) {
+				if (++m_cur_device == m_send_count) {
 					if (++m_cur_cycle == m_cycles_per_refresh - 1) {
 						m_cur_cycle = 0;
 						m_state = State::SLOT_WAIT_REFRESH;
 					}
-					else m_state = State::SLOT_RECV;
+					else {
+						// or reset
+						if (m_recv_slot == SLOT_NONE) m_state = State::SLOT_SEND;
+						else m_state = State::SLOT_RECV;
+					}
+					m_cur_device = 0;
 				}
-				m_cur_device = 0;
-			}				
-			// else we were waiting to transmit, so move to the next cycle
-			else if ((m_state == State::SLOT_SEND || m_state == State::SLOT_SEND_W_SYNC) && ++m_cur_device == m_send_count) {
-				if (++m_cur_cycle == m_cycles_per_refresh - 1) {
-					m_cur_cycle = 0;
-					m_state = State::SLOT_WAIT_REFRESH;
-				}
-				else {
-					// or reset
-					if (m_recv_slot == SLOT_NONE) m_state = State::SLOT_SEND;
-					else m_state = State::SLOT_RECV;
-				}
-				m_cur_device = 0;
+				// else if the state is in a SYNC state, move it to a regular state
+				else if (m_state == State::SLOT_SEND_W_SYNC) m_state = State::SLOT_SEND;
 			}
 			return m_state;
 		}
@@ -127,7 +135,7 @@ namespace LoomNet {
 			// else we're either waiting for a time interval or a consecutive slot
 			// if we are waiting for a time interval (SLOT_WAIT_REFRESH)
 			// this value should be ignored.
-			else return 0;
+			return 0;
 		}
 
 		void reset() {

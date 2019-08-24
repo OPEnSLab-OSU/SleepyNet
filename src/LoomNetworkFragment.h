@@ -188,7 +188,7 @@ namespace LoomNet {
 			else {
 				// copy our data into the payload
 				pkt[Structure::INTERVAL_CTRL] = (data_interval.get_unit() & 0x07) | ((refresh_interval.get_unit() & 0x07) << 3);
-				pkt[Structure::DATA_OFF] = static_cast<uint8_t>(data_interval.get_time() & 0xFF);
+				pkt[Structure::DATA_OFF] = static_cast<uint8_t>(data_interval.get_time());
 				pkt[Structure::REFRESH_OFF] = static_cast<uint8_t>(refresh_interval.get_time() & 0xFF);
 				pkt[Structure::REFRESH_OFF + 1] = static_cast<uint8_t>(refresh_interval.get_time() >> 8);
 				pkt[Structure::COUNT] = count;

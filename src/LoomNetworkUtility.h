@@ -182,21 +182,21 @@ namespace LoomNet {
 	class NetworkSim {
 	public:
 		NetworkSim()
-			: m_net_write([](const std::array<uint8_t, 255> & packet) {})
-			, m_net_read([](const bool clear) { return std::array<uint8_t, 255>(); })
+			: m_net_write([](const std::array<uint8_t, 255> & packet, const uint16_t src_addr) {})
+			, m_net_read([](const bool clear, const uint16_t src_addr) { return std::array<uint8_t, 255>(); })
 			, m_get_time([]() { return 0; }) {}
 
-		void set_net_write(const std::function<void(std::array<uint8_t, 255>)>& func) { m_net_write = func; }
-		void set_net_read(const std::function<std::array<uint8_t, 255>(const bool)>& func) { m_net_read = func; }
+		void set_net_write(const std::function<void(std::array<uint8_t, 255>, const uint16_t src_addr)>& func) { m_net_write = func; }
+		void set_net_read(const std::function<std::array<uint8_t, 255>(const bool, const uint16_t src_addr)>& func) { m_net_read = func; }
 		void set_get_time(const std::function<uint32_t(void)>& func) { m_get_time = func; }
 
-		void net_write(const std::array<uint8_t, 255> & packet) const { m_net_write(packet); }
-		std::array<uint8_t, 255> net_read(const bool clear) const { return m_net_read(clear); }
+		void net_write(const std::array<uint8_t, 255> & packet, const uint16_t src_addr) const { m_net_write(packet, src_addr); }
+		std::array<uint8_t, 255> net_read(const bool clear, const uint16_t src_addr) const { return m_net_read(clear, src_addr); }
 		uint32_t get_time() const { return m_get_time(); }
 
 	private:
-		std::function<void(std::array<uint8_t, 255>)> m_net_write;
-		std::function<std::array<uint8_t, 255>(const bool)> m_net_read;
+		std::function<void(std::array<uint8_t, 255>, const uint16_t src_addr)> m_net_write;
+		std::function<std::array<uint8_t, 255>(const bool, const uint16_t src_addr)> m_net_read;
 		std::function<uint32_t(void)> m_get_time;
 	};
 
@@ -207,4 +207,5 @@ namespace LoomNet {
 	constexpr uint8_t CYCLE_GAP = 2;
 	const TimeInterval SLOT_LENGTH(TimeInterval::Unit::SECOND, 1);
 	constexpr uint8_t BATCH_GAP = 5;
+	constexpr uint8_t FAIL_MAX = 6;
 }

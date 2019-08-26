@@ -54,6 +54,7 @@ namespace LoomNet {
 			, m_staged(false)
 			, m_next_refresh(TimeInterval::NONE, 0)
 			, m_next_data(TimeInterval::NONE, 0)
+			, m_fail_count(0)
 			, m_network(network)
 			, m_self_addr(self_addr)
 			, m_self_type(self_type) {}
@@ -78,6 +79,7 @@ namespace LoomNet {
 			m_time_idle_start = TIME_NONE;
 			m_cur_send_addr = ADDR_NONE;
 			m_slot.reset();
+			m_fail_count = 0;
 		}
 
 		void sleep_wake_ack() {
@@ -87,6 +89,7 @@ namespace LoomNet {
 			const Slotter::State cur_state = m_slot.get_state();
 			if (cur_state == Slotter::State::SLOT_WAIT_REFRESH) {
 				m_state = State::MAC_REFRESH_WAIT;
+				m_send_type = SendType::NONE;
 			}
 			else if (cur_state == Slotter::State::SLOT_SEND || cur_state == Slotter::State::SLOT_SEND_W_SYNC) {
 				m_state = State::MAC_DATA_SEND_RDY;
@@ -147,7 +150,7 @@ namespace LoomNet {
 				m_staged = true;
 				std::array<uint8_t, 255> m_out;
 				for (uint8_t i = 0; i < m_staging.get_raw_length(); i++) m_out[i] = m_staging.get_raw()[i];
-				m_network.net_write(m_out);
+				m_network.net_write(m_out, m_self_addr);
 				// change the state!
 				if (m_send_type == SendType::MAC_DATA) {
 					m_state = State::MAC_DATA_WAIT;
@@ -157,10 +160,8 @@ namespace LoomNet {
 					m_state = State::MAC_DATA_WAIT;
 					m_send_type = SendType::NONE;
 				}
-				else {
+				else
 					m_state = State::MAC_SLEEP_RDY;
-					m_send_type = SendType::NONE;
-				}
 				return true;
 			}
 			return false;
@@ -175,15 +176,12 @@ namespace LoomNet {
 						// additionally, set the send endpoint to the recieved address
 						m_cur_send_addr = m_staging.get_src();
 					}
-					else {
+					else
 						m_state = State::MAC_SLEEP_RDY;
-						m_send_type = SendType::NONE;
-					}
 				}
 				else if (m_state == State::MAC_DATA_SEND_FAIL) {
 					// next state!
 					m_state = State::MAC_SLEEP_RDY;
-					m_send_type = SendType::NONE;
 				}
 				// get the packet
 				m_staged = false;
@@ -201,25 +199,16 @@ namespace LoomNet {
 				}
 				// set the state to sleep
 				m_state = State::MAC_SLEEP_RDY;
-				m_send_type = SendType::NONE;
 			}
 		}
 
 		State check_for_data() {
 			if (m_state == State::MAC_DATA_WAIT) {
 				// check our "network"
-				const std::array<uint8_t, 255>& buf = m_network.net_read(true);
+				const std::array<uint8_t, 255>& buf = m_network.net_read(true, m_self_addr);
 				const Packet recv(buf.data(), static_cast<uint8_t>(buf.size()));
-				if (recv.get_control() != PacketCtrl::NONE) {
+				if (recv.get_control() != PacketCtrl::NONE && recv.check_packet(m_cur_send_addr)) {
 					// a packet! wow.
-					// if the framecheck fails to verify, ignore the packet
-					if (!recv.check_packet(m_cur_send_addr)) {
-						// TODO: Add a "failed count" here
-						m_send_type = SendType::NONE;
-						if (m_staged) m_state = State::MAC_DATA_SEND_FAIL;
-						else m_state = State::MAC_SLEEP_RDY;
-						return m_state;
-					}
 					// check to see if it's the right kind of packet
 					const PacketCtrl ctrl = recv.get_control();
 					if (ctrl == PacketCtrl::DATA_TRANS && m_send_type == SendType::MAC_ACK_WITH_DATA) {
@@ -233,7 +222,6 @@ namespace LoomNet {
 						// can recieve
 						m_send_ack();
 						// ready for next reply
-						m_send_type = SendType::NONE;
 						m_staging = recv;
 						m_staged = true;
 						m_state = State::MAC_DATA_RECV_RDY;
@@ -243,9 +231,10 @@ namespace LoomNet {
 						
 						// clear the staged packet, since it sent successfully
 						m_staged = false;
+						// set fail count to zero
+						m_fail_count = 0;
 						// got an ACK! Guess we're finished with this transaction
 						m_state = State::MAC_SLEEP_RDY;
-						m_send_type = SendType::NONE;
 					}
 					else {
 						// TODO: make error handling less brittle
@@ -260,6 +249,13 @@ namespace LoomNet {
 					if (delta.get_time() >= LOOPS_PER_SLOT / 2) {
 						// I suppose you have nothing to say for yourself
 						// very well
+						// increment fail counter depending on if we transmitted and didn't get anything back
+						if ((m_send_type == SendType::MAC_ACK_NO_DATA
+							|| m_send_type == SendType::NONE)
+							&& ++m_fail_count >= FAIL_MAX) {
+							// reset the slotter, to trigger a refresh
+							m_slot.reset();
+						}
 						m_send_type = SendType::NONE;
 						if (m_staged) m_state = State::MAC_DATA_SEND_FAIL;
 						else m_state = State::MAC_SLEEP_RDY;
@@ -270,6 +266,8 @@ namespace LoomNet {
 		}
 
 		void check_for_refresh() {
+			// reset fail count since fail count is per batch
+			m_fail_count = 0;
 			// calculate the number of slots remaining until the next refresh using preconfigured values
 			const uint32_t slots_until_refresh = (m_slot.get_total_slots() + CYCLE_GAP) * (CYCLES_PER_BATCH - 1) - CYCLE_GAP
 				+ BATCH_GAP + REFRESH_CYCLE_SLOTS;
@@ -280,7 +278,7 @@ namespace LoomNet {
 				m_time_idle_start = time_now;
 			if (m_self_type != DeviceType::COORDINATOR) {
 				// check our "network"
-				const std::array<uint8_t, 255> & buf = m_network.net_read(false);
+				const std::array<uint8_t, 255> & buf = m_network.net_read(false, m_self_addr);
 				const Packet recv(buf.data(), static_cast<uint8_t>(buf.size()));
 				if (recv.get_control() != PacketCtrl::NONE) {
 					// guess we got a refresh packet!
@@ -293,7 +291,6 @@ namespace LoomNet {
 						&& recv.check_packet(m_self_addr)) {
 						const RefreshPacket& ref_frag = recv.as<RefreshPacket>();
 						// set the next data and refresh cycle based on the data
-						// TODO: Do things based off of m_next_data_cycle
 						m_next_data = ref_frag.get_data_interval() + time_now;
 						m_next_refresh = ref_frag.get_refresh_interval() + time_now;
 						m_state = State::MAC_SLEEP_RDY;
@@ -338,7 +335,7 @@ namespace LoomNet {
 				frag.set_framecheck();
 				std::array<uint8_t, 255> temp;
 				for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag.get_raw()[i];
-				m_network.net_write(temp);
+				m_network.net_write(temp, m_self_addr);
 				// next state!
 				m_next_data = next_data_relative + time_now;
 				m_next_refresh = next_refresh_relative + time_now;
@@ -358,7 +355,7 @@ namespace LoomNet {
 			const Packet frag = ACKPacket::Factory(m_self_addr);
 			std::array<uint8_t, 255> temp;
 			for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag.get_raw()[i];
-			m_network.net_write(temp);
+			m_network.net_write(temp, m_self_addr);
 		}
 
 		Slotter m_slot;
@@ -371,6 +368,7 @@ namespace LoomNet {
 		bool m_staged;
 		TimeInterval m_next_refresh;
 		TimeInterval m_next_data;
+		uint8_t m_fail_count;
 		const uint16_t m_self_addr;
 		const DeviceType m_self_type;
 		// variables used for simulation

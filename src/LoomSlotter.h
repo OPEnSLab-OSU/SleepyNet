@@ -131,7 +131,6 @@ namespace LoomNet {
 				// of slots
 				else return get_recv_slot();
 			}
-			// TODO: "next slot" timing
 			// else we're either waiting for a time interval or a consecutive slot
 			// if we are waiting for a time interval (SLOT_WAIT_REFRESH)
 			// this value should be ignored.

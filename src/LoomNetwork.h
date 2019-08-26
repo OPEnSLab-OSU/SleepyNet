@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include "CircularBuffer.h"
 #include "LoomNetworkFragment.h"
 #include "LoomNetworkUtility.h"
@@ -106,7 +105,6 @@ namespace LoomNet {
 				// if the packet doesn't insert for some reason, the network has broken
 				if (!m_buffer_send.emplace_front(m_mac.get_cur_send_address(), m_mac.get_staged_packet()))
 					return m_halt_error(Error::SEND_BUF_FULL);
-				// TODO: count failures to transmit somehow? not here since this can be triggered by an end device not starting the handshake
 			}
 			// if the mac has data ready to be copied, do that
 			else if (mac_status == MAC::State::MAC_DATA_RECV_RDY) {
@@ -145,10 +143,6 @@ namespace LoomNet {
 						if (!m_buffer_send.emplace_back(nexthop, data_frag))
 							return m_halt_error(Error::SEND_BUF_FULL);
 					}
-				}
-				// TODO: remove
-				else {
-					// std::cout << "					Dropped duplicate!" << std::endl;
 				}
 			}
 			// throw an error if the MAC state is out of bounds
@@ -220,7 +214,7 @@ namespace LoomNet {
 		const Router& get_router() const { return m_router; }
 		const MAC& get_mac() const { return m_mac; }
 
-	private:
+	// private:
 		uint8_t m_halt_error(Error error) {
 			m_last_error = error;
 			// teardown here?

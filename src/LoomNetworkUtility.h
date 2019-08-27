@@ -179,27 +179,6 @@ namespace LoomNet {
 		return ADDR_ERROR;
 	}
 
-	class NetworkSim {
-	public:
-		NetworkSim()
-			: m_net_write([](const std::array<uint8_t, 255> & packet, const uint16_t src_addr) {})
-			, m_net_read([](const bool clear, const uint16_t src_addr) { return std::array<uint8_t, 255>(); })
-			, m_get_time([]() { return 0; }) {}
-
-		void set_net_write(const std::function<void(std::array<uint8_t, 255>, const uint16_t src_addr)>& func) { m_net_write = func; }
-		void set_net_read(const std::function<std::array<uint8_t, 255>(const bool, const uint16_t src_addr)>& func) { m_net_read = func; }
-		void set_get_time(const std::function<uint32_t(void)>& func) { m_get_time = func; }
-
-		void net_write(const std::array<uint8_t, 255> & packet, const uint16_t src_addr) const { m_net_write(packet, src_addr); }
-		std::array<uint8_t, 255> net_read(const bool clear, const uint16_t src_addr) const { return m_net_read(clear, src_addr); }
-		uint32_t get_time() const { return m_get_time(); }
-
-	private:
-		std::function<void(std::array<uint8_t, 255>, const uint16_t src_addr)> m_net_write;
-		std::function<std::array<uint8_t, 255>(const bool, const uint16_t src_addr)> m_net_read;
-		std::function<uint32_t(void)> m_get_time;
-	};
-
 	// debug stuff for simulation
 	// TODO: replace this stuff with real numbers
 	constexpr uint8_t CYCLES_PER_BATCH = 5;

@@ -5,6 +5,7 @@
 #include "LoomNetworkFragment.h"
 #include "LoomNetworkUtility.h"
 #include "LoomSlotter.h"
+#include "LoomRadio.h"
 
 /** 
  * Loom Medium Access Control 
@@ -43,7 +44,7 @@ namespace LoomNet {
 		MAC(	const uint16_t self_addr, 
 				const DeviceType self_type, 
 				const Slotter& slot, 
-				const NetworkSim& network)
+				Radio& radio)
 			: m_slot(slot)
 			, m_state(State::MAC_REFRESH_WAIT)
 			, m_send_type(SendType::NONE)
@@ -55,9 +56,12 @@ namespace LoomNet {
 			, m_next_refresh(TimeInterval::NONE, 0)
 			, m_next_data(TimeInterval::NONE, 0)
 			, m_fail_count(0)
-			, m_network(network)
+			, m_radio(radio)
 			, m_self_addr(self_addr)
-			, m_self_type(self_type) {}
+			, m_self_type(self_type) {
+			
+			m_radio.enable();
+		}
 
 		bool operator==(const MAC& rhs) const {
 			return (rhs.m_slot == m_slot)
@@ -80,6 +84,9 @@ namespace LoomNet {
 			m_cur_send_addr = ADDR_NONE;
 			m_slot.reset();
 			m_fail_count = 0;
+			// reset radio
+			m_radio.disable();
+			m_radio.enable();
 		}
 
 		void sleep_wake_ack() {
@@ -90,6 +97,8 @@ namespace LoomNet {
 			if (cur_state == Slotter::State::SLOT_WAIT_REFRESH) {
 				m_state = State::MAC_REFRESH_WAIT;
 				m_send_type = SendType::NONE;
+				// wake the radio premptivly to improve recieving response time
+				m_radio.wake();
 			}
 			else if (cur_state == Slotter::State::SLOT_SEND || cur_state == Slotter::State::SLOT_SEND_W_SYNC) {
 				m_state = State::MAC_DATA_SEND_RDY;
@@ -100,19 +109,21 @@ namespace LoomNet {
 			else if (cur_state == Slotter::State::SLOT_RECV || cur_state == Slotter::State::SLOT_RECV_W_SYNC) {
 				m_state = State::MAC_DATA_WAIT;
 				m_send_type = SendType::MAC_ACK_WITH_DATA;
+				// wake the radio premptivly to improve recieving response time
+				m_radio.wake();
 			}
 			else m_state = State::MAC_CLOSED;
 			// move the slotter forward
 			m_slot.next_state();
 			// reset time slot idle counter
-			m_time_idle_start = TimeInterval(TimeInterval::SECOND, m_network.get_time());
+			m_time_idle_start = m_radio.get_time();
 		}
 
 		// simulation time is in slots remaining
 		// we do one slot for debugging purposes
 		TimeInterval sleep_next_wake_time() const {
 			const Slotter::State state = m_slot.get_state();
-			const TimeInterval time(TimeInterval::SECOND, m_network.get_time());
+			const TimeInterval time(m_radio.get_time());
 			if (state == Slotter::State::SLOT_WAIT_REFRESH)
 				return  m_next_refresh - time;
 				
@@ -148,9 +159,9 @@ namespace LoomNet {
 				// commit the framecheck
 				m_staging.set_framecheck();
 				m_staged = true;
-				std::array<uint8_t, 255> m_out;
-				for (uint8_t i = 0; i < m_staging.get_raw_length(); i++) m_out[i] = m_staging.get_raw()[i];
-				m_network.net_write(m_out, m_self_addr);
+				// wake the radio if needed
+				if (m_radio.get_state() == Radio::State::SLEEP) m_radio.wake();
+				m_radio.send(m_staging);
 				// change the state!
 				if (m_send_type == SendType::MAC_DATA) {
 					m_state = State::MAC_DATA_WAIT;
@@ -160,8 +171,10 @@ namespace LoomNet {
 					m_state = State::MAC_DATA_WAIT;
 					m_send_type = SendType::NONE;
 				}
-				else
+				else {
 					m_state = State::MAC_SLEEP_RDY;
+					m_radio.sleep();
+				}
 				return true;
 			}
 			return false;
@@ -169,19 +182,16 @@ namespace LoomNet {
 
 		Packet get_staged_packet() {
 			if (m_staged) {
-				if (m_state == State::MAC_DATA_RECV_RDY) {
+				if (m_state == State::MAC_DATA_RECV_RDY && m_send_type == SendType::MAC_ACK_WITH_DATA) {
 					// next state!
-					if (m_send_type == SendType::MAC_ACK_WITH_DATA) {
-						m_state = State::MAC_DATA_SEND_RDY;
-						// additionally, set the send endpoint to the recieved address
-						m_cur_send_addr = m_staging.get_src();
-					}
-					else
-						m_state = State::MAC_SLEEP_RDY;
+					m_state = State::MAC_DATA_SEND_RDY;
+					// additionally, set the send endpoint to the recieved address
+					m_cur_send_addr = m_staging.get_src();
 				}
 				else if (m_state == State::MAC_DATA_SEND_FAIL) {
 					// next state!
 					m_state = State::MAC_SLEEP_RDY;
+					m_radio.sleep();
 				}
 				// get the packet
 				m_staged = false;
@@ -199,15 +209,18 @@ namespace LoomNet {
 				}
 				// set the state to sleep
 				m_state = State::MAC_SLEEP_RDY;
+				// radio is already asleep
 			}
 		}
 
 		State check_for_data() {
 			if (m_state == State::MAC_DATA_WAIT) {
-				// check our "network"
-				const std::array<uint8_t, 255>& buf = m_network.net_read(true, m_self_addr);
-				const Packet recv(buf.data(), static_cast<uint8_t>(buf.size()));
-				if (recv.get_control() != PacketCtrl::NONE && recv.check_packet(m_cur_send_addr)) {
+				// check our network
+				const Packet& recv(m_radio.recv());
+				// check that the packet is not emptey, is not corrupted, and not from ourselves
+				if (recv.get_control() != PacketCtrl::NONE 
+					&& recv.check_packet(m_cur_send_addr) 
+					&& recv.get_src() != m_self_addr) {
 					// a packet! wow.
 					// check to see if it's the right kind of packet
 					const PacketCtrl ctrl = recv.get_control();
@@ -235,6 +248,7 @@ namespace LoomNet {
 						m_fail_count = 0;
 						// got an ACK! Guess we're finished with this transaction
 						m_state = State::MAC_SLEEP_RDY;
+						m_radio.sleep();
 					}
 					else {
 						// TODO: make error handling less brittle
@@ -245,7 +259,7 @@ namespace LoomNet {
 				else {
 					// check the timeout
 					// TODO: Implement in terms of real time units
-					const TimeInterval delta = TimeInterval(TimeInterval::SECOND, m_network.get_time()) - m_time_idle_start;
+					const TimeInterval delta = m_radio.get_time() - m_time_idle_start;
 					if (delta.get_time() >= LOOPS_PER_SLOT / 2) {
 						// I suppose you have nothing to say for yourself
 						// very well
@@ -258,7 +272,10 @@ namespace LoomNet {
 						}
 						m_send_type = SendType::NONE;
 						if (m_staged) m_state = State::MAC_DATA_SEND_FAIL;
-						else m_state = State::MAC_SLEEP_RDY;
+						else {
+							m_state = State::MAC_SLEEP_RDY;
+							m_radio.sleep();
+						}
 					}
 				}
 			}
@@ -272,14 +289,13 @@ namespace LoomNet {
 			const uint32_t slots_until_refresh = (m_slot.get_total_slots() + CYCLE_GAP) * (CYCLES_PER_BATCH - 1) - CYCLE_GAP
 				+ BATCH_GAP + REFRESH_CYCLE_SLOTS;
 			// if we're a router or end device, just check and see if anyone has transmitted a signal
-			const TimeInterval time_now(TimeInterval::SECOND, m_network.get_time());
+			const TimeInterval time_now(m_radio.get_time());
 			// and if we haven't already (this should only happen on first power on) set the idle timestamp
 			if (m_time_idle_start.is_none()) 
 				m_time_idle_start = time_now;
 			if (m_self_type != DeviceType::COORDINATOR) {
 				// check our "network"
-				const std::array<uint8_t, 255> & buf = m_network.net_read(false, m_self_addr);
-				const Packet recv(buf.data(), static_cast<uint8_t>(buf.size()));
+				const Packet& recv(m_radio.recv());
 				if (recv.get_control() != PacketCtrl::NONE) {
 					// guess we got a refresh packet!
 					// ignore everything in it for now, we'll deal with timing stuff later
@@ -294,6 +310,7 @@ namespace LoomNet {
 						m_next_data = ref_frag.get_data_interval() + time_now;
 						m_next_refresh = ref_frag.get_refresh_interval() + time_now;
 						m_state = State::MAC_SLEEP_RDY;
+						m_radio.sleep();
 						// increment the slotter state, if we haven't already via sleep_wake_ack
 						if (m_slot.get_state() == Slotter::State::SLOT_WAIT_REFRESH)
 							m_slot.next_state();
@@ -302,7 +319,7 @@ namespace LoomNet {
 				// if we haven't recieved anything, track how many slots it's been
 				// if it's been over the reasonable number of slots, fail
 				else {
-					const TimeInterval delta = TimeInterval(TimeInterval::SECOND, m_network.get_time()) - m_time_idle_start;
+					const TimeInterval delta = m_radio.get_time() - m_time_idle_start;
 					if (m_next_refresh.is_none()) {
 						if (delta.get_time() >= (slots_until_refresh + REFRESH_CYCLE_SLOTS) * LOOPS_PER_SLOT) {
 							// first refresh didn't work, so hard fail
@@ -318,6 +335,7 @@ namespace LoomNet {
 						const uint32_t next_refresh_relative = (slots_until_refresh - REFRESH_CYCLE_SLOTS) * LOOPS_PER_SLOT + LOOPS_PER_SLOT / 2;
 						m_next_refresh = time_now + TimeInterval(TimeInterval::SECOND, next_refresh_relative);
 						m_state = State::MAC_SLEEP_RDY;
+						m_radio.sleep();
 					}
 				}
 			}
@@ -333,13 +351,12 @@ namespace LoomNet {
 					next_refresh_relative - TimeInterval(TimeInterval::SECOND, 1), 
 					0);
 				frag.set_framecheck();
-				std::array<uint8_t, 255> temp;
-				for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag.get_raw()[i];
-				m_network.net_write(temp, m_self_addr);
+				m_radio.send(frag);
 				// next state!
 				m_next_data = next_data_relative + time_now;
 				m_next_refresh = next_refresh_relative + time_now;
 				m_state = State::MAC_SLEEP_RDY;
+				m_radio.sleep();
 				// increment the slotter state, if we haven't already via sleep_wake_ack
 				if (m_slot.get_state() == Slotter::State::SLOT_WAIT_REFRESH)
 					m_slot.next_state();
@@ -352,10 +369,7 @@ namespace LoomNet {
 
 		void m_send_ack() {
 			// send a regular ACK packet
-			const Packet frag = ACKPacket::Factory(m_self_addr);
-			std::array<uint8_t, 255> temp;
-			for (uint8_t i = 0; i < temp.size(); i++) temp[i] = frag.get_raw()[i];
-			m_network.net_write(temp, m_self_addr);
+			m_radio.send(ACKPacket::Factory(m_self_addr));
 		}
 
 		Slotter m_slot;
@@ -369,9 +383,8 @@ namespace LoomNet {
 		TimeInterval m_next_refresh;
 		TimeInterval m_next_data;
 		uint8_t m_fail_count;
+		Radio& m_radio;
 		const uint16_t m_self_addr;
 		const DeviceType m_self_type;
-		// variables used for simulation
-		const NetworkSim& m_network;
 	};
 }

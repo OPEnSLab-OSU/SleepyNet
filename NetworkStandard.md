@@ -257,20 +257,18 @@ The *ACK* packet shall be formatted as follows, and shall not contain the MAC pa
 
 A radio being used by the Loom Network Stack shall be capable of:
 * Instant transmission/receiving.
-* Detecting radio channel activity.
 * Maintaining functionality through power cycling.
-* Operating through a collision.
 
 It is assumed that power consumption is transmission > receiving > detecting activity.
 
 A radio shall transition from the following states:
 ```C++
-                                  (Radio ON)
-+----------+  Enable    +-------+  Receive   +---------+   Transmit    +----------+
-|          |----------->|       |----------->|         |-------------->|          |
-| Disabled |            | Sleep |            | Receive |               | Transmit |
-|          |<-----------|       |<-----------|         |<--------------|          |
-+----------+  Disable   +-------+   Sleep    +---------+   Receive     +----------+
+                                                      (Radio ON)
++----------+  Enable    +-------+    Wake    +------+ Send/Recv
+|          |----------->|       |----------->|      |----------+
+| Disabled |            | Sleep |            | Idle |          |
+|          |<-----------|       |<-----------|      |<---------+
++----------+  Disable   +-------+   Sleep    +------+
 ```
 If a radio transitions between states, it shall notify the MAC layer of this transition. In addition, a radio shall upon transmission failure, but shall not attempt to retransmit. It is preferred that data sent over the air be only from the MAC layer.
 

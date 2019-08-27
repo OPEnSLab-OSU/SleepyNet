@@ -6,6 +6,7 @@
 #include "../../../src/LoomRouter.h"
 #include "../../../src/LoomNetworkConfig.h"
 #include "../../../src/LoomNetworkInfo.h"
+#include "TestNetwork.h"
 #include <iostream>
 #include <vector>
 #include <bitset>
@@ -41,270 +42,51 @@ void test_route(const LoomNet::Router r1, const uint16_t dst, const uint16_t che
 	}
 }
 
-class TestNetwork {
-public:
-	using NetStatus = LoomNet::Network<16, 16>::Status;
-	using NetTrack = std::tuple<uint16_t, std::string, size_t>;
-
-	TestNetwork(const JsonObjectConst& obj)
-		: airwaves{ 0 }
-		, devices{ {
-			{ LoomNet::read_network_topology(obj, "Router 3 Router 1 End Device 1"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 3 Router 1"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 3"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 2 End Device 1"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 2"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 1 End Device 3"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 1 Router 2"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 1 Router 2 End Device 1"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 1 Router 2 End Device 2"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 1 Router 1"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 1 Router 1 End Device 1"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 1 End Device 2"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 1 End Device 1"), sim_net },
-			{ LoomNet::read_network_topology(obj, "Router 1"), sim_net },
-			{ LoomNet::read_network_topology(obj, "End Device 1"), sim_net },
-			{ LoomNet::read_network_topology(obj, "BillyTheCoord"), sim_net }
-		} }
-		, busy(false)
-		, next_wake_times{ 0 }
-		, sim_net()
-		, cur_slot(0)
-		, cur_loop(0)
-		, send_track()
-		, last_src_addr(LoomNet::ADDR_NONE)
-		, rand_engine(std::random_device()())
-	{
-		reset();
-	}
-
-	bool next_slot(const bool quiet = false, const bool disable_sync_check = false) {
-		// clear the network
-		if (busy) {
-			// std::cout << "Unread network packet!";
-			// return false;
-			busy = false;
-		}
-		airwaves.fill(0);
-		cur_loop = 0;
-		// increment all the slot time trackers in the send tracking hash table
-		for (auto& elem : send_track)
-			std::get<2>(elem.second)++;
-		if (!quiet) std::cout << "Slot: " << std::dec << cur_slot << std::endl;
-		// wake all the devices that scheduled a wakeup now
-		if (!quiet) std::cout << "	Woke: ";
-		auto woke_count = 0;
-		for (uint8_t o = 0; o < devices.size(); o++) {
-			if (devices[o].get_status() & NetStatus::NET_SLEEP_RDY) {
-				if (cur_slot * LoomNet::LOOPS_PER_SLOT >= next_wake_times[o]) {
-					devices[o].net_sleep_wake_ack();
-					woke_count++;
-					if (!quiet) std::cout << "0x" << std::hex << std::setfill('0') << std::setw(4) << devices[o].get_router().get_self_addr() << ", ";
-				}
-			}
-		}
-		if (!quiet) std::cout << std::endl;
-		if (!disable_sync_check && woke_count != 1 && woke_count != 2 && woke_count != 16 && woke_count != 0 && woke_count != 15) {
-			std::cout << "Devices out of sync!" << std::endl;
-			return false;
-		}
-		// iterate through each element until all of them are asleep, then move to the next slot
-		bool all_sleep;
-		for (; cur_loop < LoomNet::LOOPS_PER_SLOT; cur_loop++) {
-			all_sleep = true;
-			if (!quiet) std::cout << "	Iteration " << cur_loop << ":" << std::endl;
-			for (uint8_t i = 0; i < devices.size(); i++) {
-				// if the device is awake
-				const uint8_t status = devices[i].get_status();
-				if (status == NetStatus::NET_CLOSED) {
-					std::cout << std::hex << devices[i].get_router().get_self_addr() << " closed!" << std::endl;
+// test every device sending to every device!
+bool test_network_operation(TestNetwork& network, const std::array<uint16_t, 16>& all_addrs, const int drop_rate) {
+	// get past the refresh cycle first
+	for (auto i = 0; i < 5; i++) network.next_slot();
+	// start your engines!
+	network.set_drop_rate(drop_rate);
+	// for every combination of addressi
+	for (const auto src : all_addrs) {
+		for (const auto dst : all_addrs) {
+			if (src != dst) {
+				char buf[16];
+				snprintf(buf, sizeof(buf), "0x%04X->0x%04X", src, dst);
+				if (!network.send_data_and_verify(src, dst, std::string(buf))) {
+					std::cout << "Failed to send: " << src << "->" << dst << std::endl;
 					return false;
 				}
-				// sleep check
-				else if (!(status & NetStatus::NET_SLEEP_RDY)) {
-					// Send/recieve data!
-					if (status & NetStatus::NET_RECV_RDY) {
-						if (!quiet) {
-							std::cout << "	0x" << std::hex << std::setfill('0') << std::setw(4) << devices[i].get_router().get_self_addr();
-							std::cout << " recieved: " << std::endl;
-						}
-						do {
-							const LoomNet::Packet& buf = devices[i].app_recv();
-							const LoomNet::DataPacket& frag = buf.as<LoomNet::DataPacket>();
-							const std::string payload(reinterpret_cast<const char*>(frag.get_payload()), frag.get_payload_length());
-							if (!quiet) std::cout << "		" << payload << std::endl;
-							// find the packet in the tracking table, and remove it
-							// verifying it was recieved
-							// get all the packets that are outbound for this device
-							auto find_iter = send_track.equal_range(devices[i].get_router().get_self_addr());
-							auto& e = find_iter.first;
-							size_t num_slots = 0;
-							// find the one that matchs this packet
-							for (; e != find_iter.second; ++e) {
-								if (std::get<0>(e->second) == frag.get_orig_src()
-									&& std::get<1>(e->second).compare(payload) == 0) {
-									num_slots = std::get<2>(e->second);
-									break;
-								}
-							}
-							// if we didn't find one, print and error out
-							if (e == find_iter.second) {
-								std::cout << "	Invalid packet!" << std::endl;
+				// run until success, with twelve iterations of all end devices sending data
+				for (auto i = 0; i < 12; i++) {
+					for (auto& d : network.devices) {
+						if (d.get_router().get_device_type() == LoomNet::DeviceType::END_DEVICE) {
+							if (!network.send_data_and_verify(d.get_router().get_self_addr(), LoomNet::ADDR_COORD, std::string("use LOOM!"))) {
+								std::cout << "Failed to send: " << d.get_router().get_self_addr() << "->" << LoomNet::ADDR_COORD << std::endl;
 								return false;
 							}
-							// else erase the one we found
-							else send_track.erase(e);
-							// else print some useful data
-							if (!quiet) std::cout << "		From: 0x" << std::hex << std::setfill('0') << std::setw(4) << frag.get_orig_src() << std::endl;
-							if (!quiet) std::cout << "		Took " << std::dec << num_slots << " slots" << std::endl;
-						} while (devices[i].get_status() & NetStatus::NET_RECV_RDY);
+						}
 					}
-					// run the state machine
-					const uint8_t new_status = devices[i].net_update();
-					if (!quiet) std::cout << "		Status of 0x" << std::hex << std::setfill('0') << std::setw(4) << devices[i].get_router().get_self_addr() << ": " << std::bitset<8>(devices[i].get_status()) << std::endl;
-					// if it wants to go to sleep now, add the time to the wake times
-					if (new_status & NetStatus::NET_SLEEP_RDY)
-						next_wake_times[i] = devices[i].net_sleep_next_wake_time().get_time() + cur_slot * LoomNet::LOOPS_PER_SLOT + cur_loop;
-					else all_sleep = false;
+					// next cycle!
+					network.next_cycle();
 				}
-			}
-			if (all_sleep) break;
-		}
-		if (!quiet) std::cout << "	Took " << cur_loop << " iterations." << std::endl;
-		// next slot!
-		cur_slot++;
-		return true;
-	}
-
-	uint8_t next_cycle(const bool quiet = true, const bool disable_sync_check = false) {
-		// use the coordinator to judge the current state of the network
-		const LoomNet::Slotter& slot = devices[15].get_mac().get_slotter();
-		uint8_t last_cycle;
-		do {
-			last_cycle = slot.get_cur_data_cycle();
-			if (!next_slot(quiet, disable_sync_check)) {
-				std::cout << " Failed during next cycle" << std::endl;
-				return 0;
-			}
-
-		} while (last_cycle == slot.get_cur_data_cycle());
-		return slot.get_cur_data_cycle();
-	}
-
-	void next_batch(const bool quiet = true, const bool disable_sync_check = false) {
-		while (next_cycle(quiet, disable_sync_check) != 0);
-	}
-
-	bool send_data_and_verify(const uint16_t addr_src, const uint16_t addr_dst, const std::string& payload) {
-		// find the device with the right address
-		size_t index = std::numeric_limits<size_t>::max();
-		for (size_t i = 0; i < devices.size(); i++) {
-			if (devices[i].get_router().get_self_addr() == addr_src) {
-				index = i;
-				break;
+				// run a few more times to clean out the residual packets
+				auto i = 0;
+				while (network.pending_packet_count() && i++ < 10) network.next_batch();
+				// check if all the packets made it
+				if (network.pending_packet_count()) {
+					std::cout << "Lossy send failed to clear network" << std::endl;
+					std::array<size_t, 16> has_data;
+					for (auto i = 0; i < 16; i++) has_data[i] = network.devices[i].m_buffer_send.size();
+					return false;
+				}
+				else std::cout << "Cleared the network in " << i << " cycles" << std::endl;
 			}
 		}
-		if (index == std::numeric_limits<size_t>::max())
-			std::cout << "Could not find specified device: 0x" << std::hex << std::setfill('0') << std::setw(4) << addr_src << std::endl;
-		else if ((devices[index].get_status() & NetStatus::NET_SEND_RDY) == 0)
-			std::cout << "Device is unable to send!" << std::endl;
-		// tell the device to send the data
-		else {
-			// send the packet!
-			devices[index].app_send(addr_dst,
-				0,
-				reinterpret_cast<const uint8_t * const>(payload.c_str()),
-				static_cast<uint8_t>(payload.length()));
-			// add the packet to the internal tracking system, so we can verify it was recieved
-			send_track.emplace(addr_dst, NetTrack{ addr_src, payload, 0 });
-			return true;
-		}
-		return false;
 	}
-
-	void reset() {
-		airwaves.fill(0);
-		for (auto& d : devices) d.reset();
-		busy = false;
-		next_wake_times.fill(0);
-		cur_slot = 0;
-		cur_loop = 0;
-		send_track.clear();
-		last_src_addr = LoomNet::ADDR_NONE;
-		// every time the device writes to the network
-		sim_net.set_net_write([this](std::array<uint8_t, 255> packet, const uint16_t addr) {
-			// std::cout << "		Transmission from: 0x" << std::hex << std::setfill('0') << std::setw(4) << addr << std::endl;
-			if (busy) {
-				std::cout << "		Collision!" << std::endl;
-			}
-			// set the airwaves
-			airwaves = packet;
-			last_src_addr = addr;
-			busy = true;
-		});
-		// every time any device reads from the network
-		sim_net.set_net_read([this](const bool clear, const uint16_t addr) {
-			if (addr != last_src_addr) {
-				// not busy anymore! we read already
-				busy = false;
-				// clear if needed
-				const std::array<uint8_t, 255> copy = airwaves;
-				if (clear) airwaves.fill(0);
-				return copy;
-			}
-			else return std::array<uint8_t, 255>{ 0 };
-		});
-		// get the current time as the current slot
-		sim_net.set_get_time([this]() { return cur_slot * LoomNet::LOOPS_PER_SLOT + cur_loop; });
-	}
-
-	void enable_lossy_network(int prob) {
-		// every time the device writes to the network
-		sim_net.set_net_write([this, prob](std::array<uint8_t, 255> packet, const uint16_t addr) {
-			// std::cout << "		Transmission from: 0x" << std::hex << std::setfill('0') << std::setw(4) << (static_cast<uint16_t>(packet[1]) | static_cast<uint16_t>(packet[2]) << 8) << std::endl;
-			if (busy) {
-				std::cout << "		Collision!" << std::endl;
-			}
-			// have a certain probability of losing the packet
-			if (std::uniform_int_distribution<int>(0, 99)(rand_engine) > prob) {
-				// set the airwaves
-				airwaves = packet;
-				last_src_addr = addr;
-				busy = true;
-			}
-			else {
-				// std::cout << "								Dropped packet!" << std::endl;
-			}
-		});
-		// every time any device reads from the network
-		sim_net.set_net_read([this](const bool clear, const uint16_t addr) {
-			if (addr != last_src_addr) {
-				// not busy anymore! we read already
-				busy = false;
-				// clear if needed
-				const std::array<uint8_t, 255> copy = airwaves;
-				if (clear) airwaves.fill(0);
-				return copy;
-			}
-			else return std::array<uint8_t, 255>{ 0 };
-		});
-		// get the current time as the current slot
-		sim_net.set_get_time([this]() { return cur_slot * LoomNet::LOOPS_PER_SLOT + cur_loop; });
-	}
-
-	size_t pending_packet_count() const { return send_track.size(); }
-
-	std::array<uint8_t, 255> airwaves;
-	uint16_t last_src_addr;
-	std::array<LoomNet::Network<16, 16, 64>, 16> devices;
-	bool busy;
-	std::array<unsigned, 16> next_wake_times{ 0 };
-	LoomNet::NetworkSim sim_net;
-	size_t cur_slot;
-	size_t cur_loop;
-	std::multimap<uint16_t, NetTrack> send_track;
-	std::default_random_engine rand_engine;
-};
+	return true;
+}
 
 int main()
 {
@@ -421,186 +203,73 @@ int main()
 	std::cout << "begin testing Loom Network operation" << std::endl;
 	{
 		using namespace LoomNet;
-		// run some simulations of the network!
-		TestNetwork network(obj);
+		std::cout << "begin idle test" << std::endl;
+		{
+			// run some simulations of the network!
+			TestNetwork network(obj);
 
-		// simulation one: loop for awhile, make sure nothing weird happens
-		for (auto i = 0; i < 1000; i++) {
-			if (!network.next_slot(true)) {
-				std::cout << "Idle test failed!" << std::endl;
-				return false;
+			// simulation one: loop for awhile, make sure nothing weird happens
+			for (auto i = 0; i < 1000; i++) {
+				network.next_slot();
+				if (network.last_error != TestNetwork::Error::OK) {
+					std::cout << "Idle test failed!" << std::endl;
+					return false;
+				}
 			}
 		}
 		std::cout << "Idle test passed!" << std::endl;
 		std::cout << "Begin single send test." << std::endl;
-		network.reset();
 		// simuation two: single send/recieve combination to every device
 		// get past the refresh cycle first
-		for (auto i = 0; i < 5; i++) {
-			if (!network.next_slot(true)) {
-				std::cout << "Single send prep failed" << std::endl;
-				return false;
-			}
-		}
-		// for every combination of addressi
-		for (const auto src : all_addrs) {
-			for (const auto dst : all_addrs) {
-				if (src != dst) {
-					char buf[16];
-					snprintf(buf, sizeof(buf), "0x%04X->0x%04X", src, dst);
-					if (!network.send_data_and_verify(src, dst, std::string(buf))) {
-						std::cout << "Failed to send: " << src << "->" << dst << std::endl;
-						return false;
-					}
-					// run until success, with six iterations of all end devices sending data
-					for (auto i = 0; i < 6; i++) {
-						for (auto& d : network.devices) {
-							if (d.get_router().get_device_type() == LoomNet::DeviceType::END_DEVICE) {
-								if (!network.send_data_and_verify(d.get_router().get_self_addr(), ADDR_COORD, std::string("use LOOM!"))) {
-									std::cout << "Failed to send: " << d.get_router().get_self_addr() << "->" << ADDR_COORD << std::endl;
-									return false;
-								}
-							}
-						}
-						// next cycle!
-						network.next_cycle(true);
-					}
-					// run a few more times to clean out the residual packets
-					for (auto i = 0; i < 4; i++) network.next_cycle();
-					// check if all the packets made it
-					if (network.pending_packet_count()) {
-						std::cout << "Single send failed to clear network" << std::endl;
-						return false;
-					}
-				}
-			}
+		{
+			TestNetwork network(obj);
+
+			if (!test_network_operation(network, all_addrs, 0)) return false;
 		}
 		std::cout << "Single send test passed!" << std::endl;
 		std::cout << "Begin no coordinator test:" << std::endl;
-		network.reset();
-		// simuation three: no coordinator, devices eventually just error out
-		for (; network.cur_slot < 1000; network.cur_slot++) {
-			bool all_closed = true;
-			for (network.cur_loop = 0; network.cur_loop < LoomNet::LOOPS_PER_SLOT; network.cur_loop++) {
-				for (auto& d : network.devices) {
-					if (d.get_router().get_device_type() != DeviceType::COORDINATOR) {
-						const auto status = d.net_update();
-						if (status & TestNetwork::NetStatus::NET_SLEEP_RDY) {
-							std::cout << "No coordinator test failed on address: 0x" << std::hex << std::setfill('0') << std::setw(4) << d.get_router().get_self_addr() << std::endl;
-							return false;
+		{
+			TestNetwork network(obj);
+			// simuation three: no coordinator, devices eventually just error out
+			for (; network.cur_slot < 1000; network.cur_slot++) {
+				bool all_closed = true;
+				for (network.cur_loop = 0; network.cur_loop < LoomNet::LOOPS_PER_SLOT; network.cur_loop++) {
+					for (auto& d : network.devices) {
+						if (d.get_router().get_device_type() != DeviceType::COORDINATOR) {
+							const auto status = d.net_update();
+							if (status & TestNetwork::NetStatus::NET_SLEEP_RDY) {
+								std::cout << "No coordinator test failed on address: 0x" << std::hex << std::setfill('0') << std::setw(4) << d.get_router().get_self_addr() << std::endl;
+								return false;
+							}
+							all_closed &= (status == TestNetwork::NetStatus::NET_CLOSED);
 						}
-						all_closed &= (status == TestNetwork::NetStatus::NET_CLOSED);
+					}
+					if (all_closed) {
+						std::cout << "No coordinator test passed in " << std::dec << network.cur_slot << " slots" << std::endl;
+						break;
 					}
 				}
-				if (all_closed) {
-					std::cout << "No coordinator test passed in " << std::dec << network.cur_slot << " slots" << std::endl;
-					break;
-				}
+				if (all_closed) break;
 			}
-			if (all_closed) break;
+			if (network.cur_slot == 1000) std::cout << "No coordinator test failed!" << std::endl;
 		}
-		if (network.cur_slot == 1000) std::cout << "No coordinator test failed!" << std::endl;
 		std::cout << "End no coordinator test" << std::endl;
 
 		// simulation four: same as simulation two, but packets drop randomly inside the network
 		std::cout << "Begin lossy single send test." << std::endl;
-		network.reset();
-		// get past the refresh cycle first
-		for (auto i = 0; i < 5; i++) {
-			if (!network.next_slot()) {
-				std::cout << "Lossy single send prep failed" << std::endl;
-				return false;
-			}
-		}
-		// start your engines!
-		network.enable_lossy_network(5);
-		// for every combination of addressi
-		for (const auto src : all_addrs) {
-			for (const auto dst : all_addrs) {
-				if (src != dst) {
-					char buf[16];
-					snprintf(buf, sizeof(buf), "0x%04X->0x%04X", src, dst);
-					if (!network.send_data_and_verify(src, dst, std::string(buf))) {
-						std::cout << "Failed to send: " << src << "->" << dst << std::endl;
-						return false;
-					}
-					// run until success, with eight iterations of all end devices sending data
-					for (auto i = 0; i < 8; i++) {
-						for (auto& d : network.devices) {
-							if (d.get_router().get_device_type() == LoomNet::DeviceType::END_DEVICE) {
-								if (!network.send_data_and_verify(d.get_router().get_self_addr(), ADDR_COORD, std::string("use LOOM!"))) {
-									std::cout << "Failed to send: " << d.get_router().get_self_addr() << "->" << ADDR_COORD << std::endl;
-									return false;
-								}
-							}
-						}
-						// next cycle!
-						network.next_cycle(true);
-					}
-					// run a few more times to clean out the residual packets
-					auto i = 0;
-					while (network.pending_packet_count() && i++ < 20) network.next_cycle(true);
-					// check if all the packets made it
-					if (network.pending_packet_count()) {
-						std::cout << "Lossy send failed to clear network" << std::endl;
-						std::array<size_t, 16> has_data;
-						for (auto i = 0; i < 16; i++) has_data[i] = network.devices[i].m_buffer_send.size();
-						return false;
-					}
-					else std::cout << "Cleared the network in " << i << " cycles" << std::endl;
-				}
-			}
+		{
+			TestNetwork network(obj);
+
+			if (!test_network_operation(network, all_addrs, 5)) return false;
 		}
 		std::cout << "Lossy single send test passed!" << std::endl;
 
 		// simulation four: same as simulation two, but packets drop randomly inside the network
 		std::cout << "Begin even lossyer single send test." << std::endl;
-		network.reset();
-		// get past the refresh cycle first
-		for (auto i = 0; i < 5; i++) {
-			if (!network.next_slot()) {
-				std::cout << "Lossy single send prep failed" << std::endl;
-				return false;
-			}
-		}
-		// start your engines!
-		network.enable_lossy_network(15);
-		// for every combination of addressi
-		for (const auto src : all_addrs) {
-			for (const auto dst : all_addrs) {
-				if (src != dst) {
-					char buf[16];
-					snprintf(buf, sizeof(buf), "0x%04X->0x%04X", src, dst);
-					if (!network.send_data_and_verify(src, dst, std::string(buf))) {
-						std::cout << "Failed to send: " << src << "->" << dst << std::endl;
-						return false;
-					}
-					// run until success, with six iterations of all end devices sending data
-					for (auto i = 0; i < 12; i++) {
-						for (auto& d : network.devices) {
-							if (d.get_router().get_device_type() == LoomNet::DeviceType::END_DEVICE) {
-								if (!network.send_data_and_verify(d.get_router().get_self_addr(), ADDR_COORD, std::string("use LOOM!"))) {
-									std::cout << "Failed to send: " << d.get_router().get_self_addr() << "->" << ADDR_COORD << std::endl;
-									return false;
-								}
-							}
-						}
-						// next cycle!
-						network.next_cycle(true, true);
-					}
-					// run a few more times to clean out the residual packets
-					auto i = 0;
-					while (network.pending_packet_count() && i++ < 10) network.next_batch(true, true);
-					// check if all the packets made it
-					if (network.pending_packet_count()) {
-						std::cout << "Lossy send failed to clear network" << std::endl;
-						std::array<size_t, 16> has_data;
-						for (auto i = 0; i < 16; i++) has_data[i] = network.devices[i].m_buffer_send.size();
-						return false;
-					}
-					else std::cout << "Cleared the network in " << i << " cycles" << std::endl;
-				}
-			}
+		{
+			TestNetwork network(obj);
+
+			if (!test_network_operation(network, all_addrs, 15)) return false;
 		}
 		std::cout << "Lossyer single send test passed!" << std::endl;
 	}

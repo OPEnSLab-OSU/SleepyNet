@@ -5,6 +5,8 @@
 #include "LoomNetworkUtility.h"
 #include "LoomMAC.h"
 #include "LoomNetworkInfo.h"
+#include "LoomRadio.h"
+#include <type_traits>
 
 /**
  * Loom Network Layer
@@ -12,8 +14,11 @@
  */
 
 namespace LoomNet {
-	template<size_t send_buffer = 16U, size_t recv_buffer = 16U, size_t fingerprint_buffer = 32U>
+	template<class RadioImpl, size_t send_buffer = 16U, size_t recv_buffer = 16U, size_t fingerprint_buffer = 32U>
 	class Network {
+
+		static_assert(std::is_base_of<Radio, RadioImpl>::value, "Radio implementation must conform to radio interface!");
+
 	public:
 		enum Status : uint8_t {
 			NET_SLEEP_RDY = 1,
@@ -31,11 +36,12 @@ namespace LoomNet {
 			ROUTE_FAIL,
 		};
 
-		Network(const NetworkInfo& config, const NetworkSim & network)
-			: m_mac(	config.route_info.get_self_addr(), 
+		Network(const NetworkInfo& config, const RadioImpl& radio)
+			: m_radio(radio)
+			, m_mac(	config.route_info.get_self_addr(), 
 						config.route_info.get_device_type(),
 						config.slot_info, 
-						network)
+						m_radio)
 			, m_router(config.route_info)
 			, m_rolling_id(0)
 			, m_addr(config.route_info.get_self_addr())
@@ -229,6 +235,7 @@ namespace LoomNet {
 				m_status &= ~Status::NET_SLEEP_RDY;
 		}
 
+		RadioImpl m_radio;
 		MAC m_mac;
 		Router m_router;
 

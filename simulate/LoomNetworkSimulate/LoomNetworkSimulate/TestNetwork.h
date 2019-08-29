@@ -29,40 +29,56 @@ protected:
 
 class TestRadio : public LoomNet::Radio {
 public:
-	TestRadio(std::array<uint8_t, 255> & airwaves, const std::function<LoomNet::TimeInterval(void)> get_time, const std::function<bool(void)> is_drop)
+	TestRadio(std::array<uint8_t, 255> & airwaves, const size_t& cur_slot, const size_t& cur_loop, std::default_random_engine& rand, const int& drop_rate)
 		: m_airwaves(airwaves)
-		, m_get_time(get_time)
-		, m_is_drop(is_drop)
+		, m_cur_slot(cur_slot)
+		, m_cur_loop(cur_loop)
+		, m_rand(rand)
+		, m_drop_rate(drop_rate)
 		, m_state(State::DISABLED) {}
 
-	LoomNet::TimeInterval get_time() override { return m_get_time(); }
+	LoomNet::TimeInterval get_time() override { return { LoomNet::TimeInterval::SECOND, m_cur_slot * LoomNet::LOOPS_PER_SLOT + m_cur_loop }; }
 	LoomNet::Radio::State get_state() const override { return m_state; }
 	void enable() override {
-		if (m_state != State::DISABLED) std::cout << "Invalid radio state movement in enable()" << std::endl;
+		if (m_state != State::DISABLED) 
+			std::cout << "Invalid radio state movement in enable()" << std::endl;
 		m_state = State::SLEEP;
 	}
 	void disable() override {
-		if (m_state != State::SLEEP) std::cout << "Invalid radio state movement in disable()" << std::endl;
+		if (m_state != State::SLEEP) 
+			std::cout << "Invalid radio state movement in disable()" << std::endl;
 		m_state = State::DISABLED;
 	}
 	void sleep() override {
-		if (m_state != State::IDLE) std::cout << "Invalid radio state movement in sleep()" << std::endl;
+		if (m_state != State::IDLE) 
+			std::cout << "Invalid radio state movement in sleep()" << std::endl;
 		m_state = State::SLEEP;
 	}
 	void wake() override {
-		if (m_state != State::SLEEP) std::cout << "Invalid radio state movement in wake()" << std::endl;
+		if (m_state != State::SLEEP) 
+			std::cout << "Invalid radio state movement in wake()" << std::endl;
+		m_state = State::IDLE;
 	}
 	LoomNet::Packet recv() override {
+		if (m_state != State::IDLE) 
+			std::cout << "Invalid radio state to recv" << std::endl;
 		return LoomNet::Packet{ m_airwaves.data(), static_cast<uint8_t>(m_airwaves.size()) };
 	}
 	void send(const LoomNet::Packet& send) override {
-		for (auto i = 0; i < send.get_raw_length(); i++) m_airwaves[i] = send.get_raw()[i];
+		if (m_state != State::IDLE) 
+			std::cout << "Invalid radio state to recv" << std::endl;
+		if (m_drop_rate == 0
+			|| std::uniform_int_distribution<int>(0, 99)(m_rand) > m_drop_rate)
+			for (auto i = 0; i < send.get_raw_length(); i++) m_airwaves[i] = send.get_raw()[i];
+		else m_airwaves.fill(0);
  	}
 
 private:
 	std::array<uint8_t, 255>& m_airwaves;
-	const std::function<LoomNet::TimeInterval(void)> m_get_time;
-	const std::function<bool(void)> m_is_drop;
+	const size_t& m_cur_slot;
+	const size_t& m_cur_loop;
+	std::default_random_engine& m_rand;
+	const int& m_drop_rate;
 	State m_state;
 };
 
@@ -84,7 +100,7 @@ public:
 		DEVICE_CLOSED,
 	};
 
-	using NetType = LoomNet::Network<TestRadio, 16, 16, 64>;
+	using NetType = LoomNet::Network<TestRadio, 16, 16, 128>;
 	using NetStatus = NetType::Status;
 	using NetTrack = std::tuple<uint16_t, std::string, size_t>;
 
@@ -93,14 +109,8 @@ public:
 		, cur_slot(0)
 		, cur_loop(0)
 		, drop_rate(0)
-		, radio(airwaves, [this]() -> LoomNet::TimeInterval { return LoomNet::TimeInterval(
-					LoomNet::TimeInterval::SECOND, 
-					cur_slot * LoomNet::LOOPS_PER_SLOT + cur_loop 
-				); 
-			}, [this]() -> bool {
-				return drop_rate > 0
-					&& std::uniform_int_distribution<int>(0, 99)(rand_engine) > drop_rate;
-			})
+		, rand_engine(std::random_device()())
+		, radio(airwaves, cur_slot, cur_loop, rand_engine, drop_rate)
 		, devices{ {
 			{ LoomNet::read_network_topology(obj, "Router 3 Router 1 End Device 1"), radio },
 			{ LoomNet::read_network_topology(obj, "Router 3 Router 1"), radio },
@@ -121,7 +131,7 @@ public:
 		} }
 		, next_wake_times{ 0 }
 		, send_track()
-		, rand_engine(std::random_device()())
+		, dupe_track()
 		, how_much(verbose)
 		, null_buf()
 		, null_stream(&null_buf)
@@ -188,11 +198,25 @@ public:
 							}
 							// if we didn't find one, print and error out
 							if (e == find_iter.second) {
-								m_print(Verbosity::ERROR) << "	Invalid or duplicated packet!" << std::endl;
+								// check our dupe list to see if this packet is invalid or a duplicate
+								auto find_iter_dupe = dupe_track.equal_range(devices[i].get_router().get_self_addr());
+								auto& f = find_iter_dupe.first;
+								// find the one that matchs this packet
+								for (; f != find_iter_dupe.second; ++f)
+									if (std::get<0>(f->second) == frag.get_orig_src()
+										&& std::get<1>(f->second).compare(payload) == 0)
+										break;
+								if (f == find_iter_dupe.second) 
+									m_print(Verbosity::ERROR) << "Invalid packet!" << std::endl;
+								else 
+									m_print(Verbosity::ERROR) << "Duplicated packet!" << std::endl;
 								last_error = Error::UNKNOWN_PACKET;
 							}
-							// else erase the one we found
-							else send_track.erase(e);
+							// else add the one we found to the duplicate tracker so we can find it later
+							else {
+								dupe_track.insert(*e);
+								send_track.erase(e);
+							}
 							// else print some useful data
 							m_print(Verbosity::VERBOSE) << "		From: 0x" << std::hex << std::setfill('0') << std::setw(4) << frag.get_orig_src() << std::endl;
 							m_print(Verbosity::VERBOSE) << "		Took " << std::dec << num_slots << " slots" << std::endl;
@@ -202,8 +226,9 @@ public:
 					const uint8_t new_status = devices[i].net_update();
 					m_print(Verbosity::VERBOSE) << "		Status of 0x" << std::hex << std::setfill('0') << std::setw(4) << devices[i].get_router().get_self_addr() << ": " << std::bitset<8>(devices[i].get_status()) << std::endl;
 					// if it wants to go to sleep now, add the time to the wake times
-					if (new_status & NetStatus::NET_SLEEP_RDY)
+					if (new_status & NetStatus::NET_SLEEP_RDY) {
 						next_wake_times[i] = devices[i].net_sleep_next_wake_time().get_time() + cur_slot * LoomNet::LOOPS_PER_SLOT + cur_loop;
+					}
 					else all_sleep = false;
 				}
 			}
@@ -260,6 +285,8 @@ public:
 
 	void set_drop_rate(const int new_drop_rate) { drop_rate = new_drop_rate; }
 
+	void clear_dupes() { dupe_track.clear(); }
+
 	std::ostream& m_print(const Verbosity v) {
 		// emptey our string stream
 		if (static_cast<size_t>(v) <= static_cast<size_t>(how_much)) return std::cout;
@@ -270,11 +297,12 @@ public:
 	size_t cur_slot;
 	size_t cur_loop;
 	int drop_rate;
+	std::default_random_engine rand_engine;
 	TestRadio radio;
 	std::array<NetType, 16> devices;
 	std::array<unsigned, 16> next_wake_times;
 	std::multimap<uint16_t, NetTrack> send_track;
-	std::default_random_engine rand_engine;
+	std::multimap<uint16_t, NetTrack> dupe_track;
 	const Verbosity how_much;
 	NulStreambuf null_buf;
 	std::ostream null_stream;

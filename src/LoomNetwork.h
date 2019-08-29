@@ -76,7 +76,10 @@ namespace LoomNet {
 			// loop until the MAC layer is ready to sleep, or we're wating on the network
 			// update our status with the status from the MAC layer
 			// if the mac is ready for data, check our circular buffers!
-			if (mac_status == MAC::State::MAC_DATA_WAIT) m_mac.check_for_data();
+			if (mac_status == MAC::State::MAC_DATA_WAIT) {
+				if (!m_buffer_send.full()) m_mac.check_for_data();
+				else m_mac.data_pass();
+			}
 			// if we're waiting for a refresh, update the MAC layer
 			else if (mac_status == MAC::State::MAC_REFRESH_WAIT) m_mac.check_for_refresh();
 			// else we have to do something to update the layer
@@ -109,8 +112,7 @@ namespace LoomNet {
 			else if (mac_status == MAC::State::MAC_DATA_SEND_FAIL) {
 				// we always keep an open spot for a failed packet to pop back into
 				// if the packet doesn't insert for some reason, the network has broken
-				if (!m_buffer_send.emplace_front(m_mac.get_cur_send_address(), m_mac.get_staged_packet()))
-					return m_halt_error(Error::SEND_BUF_FULL);
+				m_send_add({ m_mac.get_cur_send_address(), m_mac.get_staged_packet() });
 			}
 			// if the mac has data ready to be copied, do that
 			else if (mac_status == MAC::State::MAC_DATA_RECV_RDY) {
@@ -146,8 +148,7 @@ namespace LoomNet {
 						if (nexthop == ADDR_ERROR || nexthop == ADDR_NONE)
 							return m_halt_error(Error::ROUTE_FAIL);
 						// push the packet to the send buffer, tagging it with the next hop address
-						if (!m_buffer_send.emplace_back(nexthop, data_frag))
-							return m_halt_error(Error::SEND_BUF_FULL);
+						m_send_add({ nexthop, recv_frag });
 					}
 				}
 			}
@@ -161,9 +162,7 @@ namespace LoomNet {
 
 		void app_send(const Packet& send) {
 			// push the send fragment into the buffer
-			m_buffer_send.emplace_back(m_router.route(send.as<DataPacket>().get_dst()), send);
-			// if the send buffer is full, disallow further sending
-			if (m_buffer_send.size() - 1 == m_buffer_send.allocated()) m_status &= ~Status::NET_SEND_RDY;
+			m_send_add({ m_router.route(send.as<DataPacket>().get_dst()), send });
 			// move to the next rolling ID
 			if (m_rolling_id == 255) m_rolling_id = 0;
 			else m_rolling_id++;
@@ -171,7 +170,7 @@ namespace LoomNet {
 
 		void app_send(const uint16_t dst_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length) {
 			// push the send fragment into the buffer
-			m_buffer_send.emplace_back(
+			m_send_add({
 				m_router.route(dst_addr),
 				DataPacket::Factory(
 					dst_addr,
@@ -182,9 +181,7 @@ namespace LoomNet {
 					raw_payload,
 					length
 				)
-			);
-			// if the send buffer is full, disallow further sending
-			if (m_buffer_send.full()) m_status &= ~Status::NET_SEND_RDY;
+			});
 			// move to the next rolling ID
 			if (m_rolling_id == 255) m_rolling_id = 0;
 			else m_rolling_id++;
@@ -221,6 +218,11 @@ namespace LoomNet {
 		const MAC& get_mac() const { return m_mac; }
 
 	// private:
+		void m_send_add(const std::pair<uint16_t, Packet>& elem) {
+			if (!m_buffer_send.emplace_back(elem)) m_halt_error(Error::SEND_BUF_FULL);
+			else if (m_buffer_send.size() < m_router.get_node_count()) m_status &= ~Status::NET_SEND_RDY;
+		}
+
 		uint8_t m_halt_error(Error error) {
 			m_last_error = error;
 			// teardown here?

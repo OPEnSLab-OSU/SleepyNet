@@ -59,7 +59,7 @@ bool test_network_operation(TestNetwork& network, const std::array<uint16_t, 16>
 					return false;
 				}
 				// run until success, with twelve iterations of all end devices sending data
-				for (auto i = 0; i < 12; i++) {
+				for (auto i = 0; i < 16; i++) {
 					for (auto& d : network.devices) {
 						if (d.get_router().get_device_type() == LoomNet::DeviceType::END_DEVICE) {
 							if (!network.send_data_and_verify(d.get_router().get_self_addr(), LoomNet::ADDR_COORD, std::string("use LOOM!"))) {
@@ -76,12 +76,13 @@ bool test_network_operation(TestNetwork& network, const std::array<uint16_t, 16>
 				while (network.pending_packet_count() && i++ < 10) network.next_batch();
 				// check if all the packets made it
 				if (network.pending_packet_count()) {
-					std::cout << "Lossy send failed to clear network" << std::endl;
+					std::cout << "Failed to clear network" << std::endl;
 					std::array<size_t, 16> has_data;
 					for (auto i = 0; i < 16; i++) has_data[i] = network.devices[i].m_buffer_send.size();
 					return false;
 				}
-				else std::cout << "Cleared the network in " << i << " cycles" << std::endl;
+				else std::cout << "Cleared the network in " << i << " batches" << std::endl;
+				network.clear_dupes();
 			}
 		}
 	}
@@ -222,7 +223,7 @@ int main()
 		// simuation two: single send/recieve combination to every device
 		// get past the refresh cycle first
 		{
-			TestNetwork network(obj);
+			TestNetwork network(obj, TestNetwork::Verbosity::ERROR);
 
 			if (!test_network_operation(network, all_addrs, 0)) return false;
 		}

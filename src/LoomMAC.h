@@ -61,6 +61,7 @@ namespace LoomNet {
 			, m_self_type(self_type) {
 			
 			m_radio.enable();
+			m_radio.wake();
 		}
 
 		bool operator==(const MAC& rhs) const {
@@ -85,8 +86,10 @@ namespace LoomNet {
 			m_slot.reset();
 			m_fail_count = 0;
 			// reset radio
+			if(m_radio.get_state() == Radio::State::IDLE) m_radio.sleep();
 			m_radio.disable();
 			m_radio.enable();
+			m_radio.wake();
 		}
 
 		void sleep_wake_ack() {
@@ -188,7 +191,7 @@ namespace LoomNet {
 					// additionally, set the send endpoint to the recieved address
 					m_cur_send_addr = m_staging.get_src();
 				}
-				else if (m_state == State::MAC_DATA_SEND_FAIL) {
+				else {
 					// next state!
 					m_state = State::MAC_SLEEP_RDY;
 					m_radio.sleep();
@@ -210,6 +213,8 @@ namespace LoomNet {
 				// set the state to sleep
 				m_state = State::MAC_SLEEP_RDY;
 				// radio is already asleep
+				if (m_radio.get_state() == Radio::State::IDLE)
+					m_radio.sleep();
 			}
 		}
 
@@ -280,6 +285,15 @@ namespace LoomNet {
 				}
 			}
 			return m_state;
+		}
+
+		void data_pass() {
+			// we don't or can't recieve whatever is happening for this slot
+			// ignore all and move on
+			if (m_state == State::MAC_DATA_WAIT) {
+				m_state = State::MAC_SLEEP_RDY;
+				if (m_radio.get_state() == Radio::State::IDLE) m_radio.sleep();
+			}
 		}
 
 		void check_for_refresh() {

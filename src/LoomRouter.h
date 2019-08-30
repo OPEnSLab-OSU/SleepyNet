@@ -14,8 +14,8 @@ namespace LoomNet {
 			: m_dev_type(dev_type)
 			, m_self_addr(self_addr)
 			, m_addr_parent(addr_parent)
-			, m_router_child_count(router_count)
-			, m_node_child_count(node_count) {}
+			, m_node_child_count(node_count)
+			, m_router_child_count(router_count) {}
 
 		DeviceType get_device_type() const { return m_dev_type; }
 		uint16_t get_self_addr() const { return m_self_addr; }

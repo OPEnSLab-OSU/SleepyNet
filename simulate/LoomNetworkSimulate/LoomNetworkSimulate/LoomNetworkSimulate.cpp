@@ -43,14 +43,14 @@ void test_route(const LoomNet::Router r1, const uint16_t dst, const uint16_t che
 }
 
 // test every device sending to every device!
-bool test_network_operation(TestNetwork& network, const std::array<uint16_t, 16>& all_addrs, const int drop_rate) {
+bool test_network_operation(TestNetwork& network, const int drop_rate) {
 	// get past the refresh cycle first
 	for (auto i = 0; i < 5; i++) network.next_slot();
 	// start your engines!
 	network.set_drop_rate(drop_rate);
 	// for every combination of addressi
-	for (const auto src : all_addrs) {
-		for (const auto dst : all_addrs) {
+	for (const auto src : network.all_addrs) {
+		for (const auto dst : network.all_addrs) {
 			if (src != dst) {
 				char buf[16];
 				snprintf(buf, sizeof(buf), "0x%04X->0x%04X", src, dst);
@@ -77,11 +77,9 @@ bool test_network_operation(TestNetwork& network, const std::array<uint16_t, 16>
 				// check if all the packets made it
 				if (network.pending_packet_count()) {
 					std::cout << "Failed to clear network" << std::endl;
-					std::array<size_t, 16> has_data;
-					for (auto i = 0; i < 16; i++) has_data[i] = network.devices[i].m_buffer_send.size();
 					return false;
 				}
-				else std::cout << "Cleared the network in " << i << " batches" << std::endl;
+				// else std::cout << "Cleared the network in " << i << " batches" << std::endl;
 				network.clear_dupes();
 			}
 		}
@@ -158,8 +156,6 @@ int main()
 	deserializeJson(json, JSONStr);
 	const auto obj = json.as<JsonObjectConst>();
 
-	const std::array<uint16_t, 16> all_addrs{ 0x3101, 0x3100, 0x3000, 0x2001, 0x2000, 0x1003, 0x1200, 0x1201, 0x1202, 0x1100, 0x1101, 0x1002, 0x1001, 0x1000, 0x0001, LoomNet::ADDR_COORD };
-
 	{
 		using namespace LoomNet;
 		test_address(read_network_topology(obj, "Router 3 Router 1 End Device 1"),	Router(DeviceType::END_DEVICE, 0x3101, 0x3100, 0, 0),			Slotter(3, 24, 0), "Router 3 Router 1 End Device 1");
@@ -225,7 +221,7 @@ int main()
 		{
 			TestNetwork network(obj, TestNetwork::Verbosity::ERROR);
 
-			if (!test_network_operation(network, all_addrs, 0)) return false;
+			if (!test_network_operation(network, 0)) return false;
 		}
 		std::cout << "Single send test passed!" << std::endl;
 		std::cout << "Begin no coordinator test:" << std::endl;
@@ -234,7 +230,7 @@ int main()
 			// simuation three: no coordinator, devices eventually just error out
 			for (; network.cur_slot < 1000; network.cur_slot++) {
 				bool all_closed = true;
-				for (network.cur_loop = 0; network.cur_loop < LoomNet::LOOPS_PER_SLOT; network.cur_loop++) {
+				for (network.cur_loop = 0; network.cur_loop < LoomNet::SLOT_LENGTH.get_time(); network.cur_loop++) {
 					for (auto& d : network.devices) {
 						if (d.get_router().get_device_type() != DeviceType::COORDINATOR) {
 							const auto status = d.net_update();
@@ -261,7 +257,7 @@ int main()
 		{
 			TestNetwork network(obj);
 
-			if (!test_network_operation(network, all_addrs, 5)) return false;
+			if (!test_network_operation(network, 5)) return false;
 		}
 		std::cout << "Lossy single send test passed!" << std::endl;
 
@@ -270,9 +266,21 @@ int main()
 		{
 			TestNetwork network(obj);
 
-			if (!test_network_operation(network, all_addrs, 15)) return false;
+			if (!test_network_operation(network, 15)) return false;
 		}
 		std::cout << "Lossyer single send test passed!" << std::endl;
+
+		// simulation five: simple net!
+		std::cout << "Begin simple network test!" << std::endl;
+		{
+			StaticJsonDocument<size> json;
+			deserializeJson(json, "{\"config\":{\"cycles_per_refresh\":20},\"root\":{\"name\":\"BillyTheCoord\",\"sensor\":false,\"children\":[{\"name\":\"End Device 1\",\"type\":0,\"addr\":\"0x001\"},{\"name\":\"End Device 2\",\"type\":0,\"addr\":\"0x002\"},{\"name\":\"End Device 3\",\"type\":0,\"addr\":\"0x003\"},{\"name\":\"End Device 4\",\"type\":0,\"addr\":\"0x004\"}]}}");
+			const auto obj = json.as<JsonObjectConst>();
+			TestNetwork network(obj, TestNetwork::Verbosity::VERBOSE);
+
+			if (!test_network_operation(network, 15)) return false;
+		}
+		std::cout << "Simple network passed!" << std::endl;
 	}
 
 	std::cout << "end testing Loom Network operation" << std::endl;

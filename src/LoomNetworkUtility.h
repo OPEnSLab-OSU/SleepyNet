@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <limits>
 
 /**
  * Some utility structures and constants to be used by Loom Network
@@ -19,11 +20,11 @@ namespace LoomNet {
 	constexpr uint8_t REFRESH_CYCLE_SLOTS = 5;
 
 	enum PacketCtrl : uint8_t {
-		REFRESH_INITIAL = 0b100 | (PROTOCOL_VER << 2),
-		REFRESH_ADDITONAL = 0b011 | (PROTOCOL_VER << 2),
-		ERROR = 0b001 | (PROTOCOL_VER << 2),
+		REFRESH_INITIAL = 0b001 | (PROTOCOL_VER << 2),
+		REFRESH_ADDITONAL = 0b110 | (PROTOCOL_VER << 2),
+		ERROR = 0b100 | (PROTOCOL_VER << 2),
 		DATA_TRANS = 0b101 | (PROTOCOL_VER << 2),
-		DATA_ACK = 0b110 | (PROTOCOL_VER << 2),
+		DATA_ACK = 0b011 | (PROTOCOL_VER << 2),
 		DATA_ACK_W_DATA = 0b111 | (PROTOCOL_VER << 2),
 		NONE = 0
 	};
@@ -75,7 +76,7 @@ namespace LoomNet {
 		const TimeInterval operator*(const uint32_t num) const { return { m_unit, m_time * num }; }
 		const TimeInterval operator*(const uint16_t num) const { return { m_unit, m_time * num }; }
 		const TimeInterval operator*(const uint8_t num) const { return { m_unit, m_time * num }; }
-		const TimeInterval operator*(const int32_t num) const { return { m_unit, m_time * num }; }
+		const TimeInterval operator*(const int num) const { return { m_unit, m_time * num }; }
 
 		bool operator==(const TimeInterval& rhs) const {
 			const std::array<TimeInterval, 2> & times = m_match_time(rhs);
@@ -109,9 +110,33 @@ namespace LoomNet {
 			return times[0].get_time() >= times[1].get_time();
 		}
 
-		const Unit get_unit() const { return m_unit; }
-		const uint32_t get_time() const { return m_time; }
-		const bool is_none() const { return m_unit == Unit::NONE; }
+		Unit get_unit() const { return m_unit; }
+		uint32_t get_time() const { return m_time; }
+		bool is_none() const { return m_unit == Unit::NONE; }
+
+		template<typename T>
+		void downcast() {
+			if (is_none()) return;
+			while (get_time() > std::numeric_limits<T>::max()) {
+				switch (m_unit) {
+				// millisecond -> second
+				case Unit::MILLISECOND:
+					m_time /= 1000; break;
+				// second -> minute, minute -> hour
+				case Unit::SECOND:
+				case Unit::MINUTE:
+					m_time /= 60; break;
+				// hour -> day
+				case Unit::HOUR:
+					m_time /= 24; break;
+				default:
+					m_time = 0;
+					m_unit = Unit::NONE;
+					return;
+				}
+				m_unit = static_cast<Unit>(static_cast<size_t>(m_unit) + 1);
+			}
+		}
 
 	private:
 		std::array<TimeInterval, 2> m_match_time(const TimeInterval & rhs) const {
@@ -182,9 +207,9 @@ namespace LoomNet {
 	// debug stuff for simulation
 	// TODO: replace this stuff with real numbers
 	constexpr uint8_t CYCLES_PER_BATCH = 5;
-	constexpr uint8_t LOOPS_PER_SLOT = 10;
 	constexpr uint8_t CYCLE_GAP = 2;
-	const TimeInterval SLOT_LENGTH(TimeInterval::Unit::SECOND, 1);
+	const TimeInterval SLOT_LENGTH(TimeInterval::Unit::SECOND, 10);
+	const TimeInterval RECV_TIMEOUT(TimeInterval::Unit::SECOND, 3);
 	constexpr uint8_t BATCH_GAP = 5;
 	constexpr uint8_t FAIL_MAX = 6;
 }

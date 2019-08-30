@@ -161,11 +161,11 @@ Where:
 
 | Three-Bit Code | Packet Type |
 | --- | --- |
-| 100 | Initial Refresh/Sync Data |
-| 011 | Additional Refresh/Sync Data |
-| 001 | Error |
+| 001 | Initial Refresh/Sync Data |
+| 110 | Additional Refresh/Sync Data |
+| 100 | Error |
 | 101 | Data Transmission |
-| 110 | Data ACK |
+| 011 | Data ACK |
 | 111 | Data ACK w/ Transmission |
 | 010 | Reserved |
 

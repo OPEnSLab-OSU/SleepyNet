@@ -51,6 +51,21 @@ namespace LoomNet {
 			, m_last_error(Error::NET_OK)
 			, m_status(Status::NET_SEND_RDY) {}
 
+		Network(const Network& rhs)
+			: m_radio(rhs.m_radio)
+			, m_mac(	rhs.m_router.get_self_addr(), 
+						rhs.m_router.get_device_type(), 
+						rhs.m_mac.get_slotter(), 
+						m_radio)
+			, m_router(rhs.m_router)
+			, m_rolling_id(rhs.m_rolling_id)
+			, m_addr(rhs.m_addr)
+			, m_buffer_send(rhs.m_buffer_send)
+			, m_buffer_recv(rhs.m_buffer_recv)
+			, m_buffer_fingerprint(rhs.m_buffer_fingerprint)
+			, m_last_error(rhs.m_last_error)
+			, m_status(rhs.m_status) {}
+
 		bool operator==(const Network& rhs) const {
 			return (rhs.m_mac == m_mac)
 				&& (rhs.m_router == m_router)

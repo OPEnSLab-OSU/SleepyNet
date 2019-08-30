@@ -37,7 +37,7 @@ public:
 		, m_drop_rate(drop_rate)
 		, m_state(State::DISABLED) {}
 
-	LoomNet::TimeInterval get_time() override { return { LoomNet::TimeInterval::SECOND, m_cur_slot * LoomNet::LOOPS_PER_SLOT + m_cur_loop }; }
+	LoomNet::TimeInterval get_time() override { return { LoomNet::SLOT_LENGTH.get_unit(), m_cur_slot * LoomNet::SLOT_LENGTH.get_time() + m_cur_loop }; }
 	LoomNet::Radio::State get_state() const override { return m_state; }
 	void enable() override {
 		if (m_state != State::DISABLED) 
@@ -82,6 +82,19 @@ private:
 	State m_state;
 };
 
+using NetType = LoomNet::Network<TestRadio, 16, 16, 128>;
+
+static void recurse_all_devices(const JsonArrayConst& children_array, const JsonObjectConst& root, std::vector<NetType>& devices, const TestRadio& radio) {
+	for (const JsonObjectConst obj : children_array) {
+		if (!obj.isNull()) {
+			devices.emplace_back(LoomNet::read_network_topology(root, obj["name"]), radio);
+			const JsonArrayConst childs = obj["children"];
+			if (!childs.isNull()) 
+				recurse_all_devices(childs, root, devices, radio);
+		}
+	}
+}
+
 class TestNetwork {
 public:
 	
@@ -100,7 +113,6 @@ public:
 		DEVICE_CLOSED,
 	};
 
-	using NetType = LoomNet::Network<TestRadio, 16, 16, 128>;
 	using NetStatus = NetType::Status;
 	using NetTrack = std::tuple<uint16_t, std::string, size_t>;
 
@@ -110,32 +122,28 @@ public:
 		, cur_loop(0)
 		, drop_rate(0)
 		, rand_engine(std::random_device()())
-		, radio(airwaves, cur_slot, cur_loop, rand_engine, drop_rate)
-		, devices{ {
-			{ LoomNet::read_network_topology(obj, "Router 3 Router 1 End Device 1"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 3 Router 1"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 3"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 2 End Device 1"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 2"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 1 End Device 3"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 1 Router 2"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 1 Router 2 End Device 1"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 1 Router 2 End Device 2"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 1 Router 1"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 1 Router 1 End Device 1"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 1 End Device 2"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 1 End Device 1"), radio },
-			{ LoomNet::read_network_topology(obj, "Router 1"), radio },
-			{ LoomNet::read_network_topology(obj, "End Device 1"), radio },
-			{ LoomNet::read_network_topology(obj, "BillyTheCoord"), radio }
-		} }
-		, next_wake_times{ 0 }
+		, devices{}
+		, next_wake_times{}
 		, send_track()
 		, dupe_track()
 		, how_much(verbose)
 		, null_buf()
 		, null_stream(&null_buf)
-		, last_error(Error::OK) {}
+		, last_error(Error::OK) {
+		const TestRadio radio(airwaves, cur_slot, cur_loop, rand_engine, drop_rate);
+		// create the devices array from the json!
+		const JsonObjectConst root = obj["root"];
+		// add the coordinator!
+		devices.emplace_back(LoomNet::read_network_topology(obj, root["name"]), radio);
+		const JsonArrayConst children = root["children"];
+		// add everything else through recursion!
+		if (!children.isNull()) recurse_all_devices(children, obj, devices, radio);
+		// initialize next_wake_times
+		next_wake_times.resize(devices.size(), 0);
+		// and the array of all addresses
+		all_addrs.resize(devices.size(), 0);
+		for (size_t i = 0; i < devices.size(); i++) all_addrs[i] = devices[i].get_router().get_self_addr();
+	}
 
 	void next_slot() {
 		// clear the network
@@ -150,7 +158,7 @@ public:
 		auto woke_count = 0;
 		for (uint8_t o = 0; o < devices.size(); o++) {
 			if (devices[o].get_status() & NetStatus::NET_SLEEP_RDY) {
-				if (cur_slot * LoomNet::LOOPS_PER_SLOT >= next_wake_times[o]) {
+				if (cur_slot * LoomNet::SLOT_LENGTH.get_time() >= next_wake_times[o]) {
 					devices[o].net_sleep_wake_ack();
 					woke_count++;
 					m_print(Verbosity::VERBOSE) << "0x" << std::hex << std::setfill('0') << std::setw(4) << devices[o].get_router().get_self_addr() << ", ";
@@ -158,10 +166,13 @@ public:
 			}
 		}
 		m_print(Verbosity::VERBOSE) << std::endl;
-		if (woke_count != 1 && woke_count != 2 && woke_count != 16 && woke_count != 0 && woke_count != 15) last_error = Error::OUT_OF_SYNC;
+		if (woke_count >= 3 && woke_count <= devices.size() - 2) {
+			m_print(Verbosity::ERROR) << "Devcies out of sync!" << std::endl;
+			last_error = Error::OUT_OF_SYNC;
+		}
 		// iterate through each element until all of them are asleep, then move to the next slot
 		bool all_sleep;
-		for (; cur_loop < LoomNet::LOOPS_PER_SLOT; cur_loop++) {
+		for (; cur_loop < LoomNet::SLOT_LENGTH.get_time(); cur_loop++) {
 			all_sleep = true;
 			m_print(Verbosity::VERBOSE) << "	Iteration " << cur_loop << ":" << std::endl;
 			for (uint8_t i = 0; i < devices.size(); i++) {
@@ -227,7 +238,7 @@ public:
 					m_print(Verbosity::VERBOSE) << "		Status of 0x" << std::hex << std::setfill('0') << std::setw(4) << devices[i].get_router().get_self_addr() << ": " << std::bitset<8>(devices[i].get_status()) << std::endl;
 					// if it wants to go to sleep now, add the time to the wake times
 					if (new_status & NetStatus::NET_SLEEP_RDY) {
-						next_wake_times[i] = devices[i].net_sleep_next_wake_time().get_time() + cur_slot * LoomNet::LOOPS_PER_SLOT + cur_loop;
+						next_wake_times[i] = devices[i].net_sleep_next_wake_time().get_time() + cur_slot * LoomNet::SLOT_LENGTH.get_time() + cur_loop;
 					}
 					else all_sleep = false;
 				}
@@ -241,7 +252,7 @@ public:
 
 	uint8_t next_cycle() {
 		// use the coordinator to judge the current state of the network
-		const LoomNet::Slotter& slot = devices[15].get_mac().get_slotter();
+		const LoomNet::Slotter& slot = devices[0].get_mac().get_slotter();
 		uint8_t last_cycle;
 		do {
 			last_cycle = slot.get_cur_data_cycle();
@@ -298,9 +309,9 @@ public:
 	size_t cur_loop;
 	int drop_rate;
 	std::default_random_engine rand_engine;
-	TestRadio radio;
-	std::array<NetType, 16> devices;
-	std::array<unsigned, 16> next_wake_times;
+	std::vector<NetType> devices;
+	std::vector<uint32_t> next_wake_times;
+	std::vector<uint16_t> all_addrs;
 	std::multimap<uint16_t, NetTrack> send_track;
 	std::multimap<uint16_t, NetTrack> dupe_track;
 	const Verbosity how_much;

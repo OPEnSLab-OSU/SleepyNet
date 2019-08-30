@@ -84,12 +84,13 @@ namespace LoomNet {
 		}
 		const uint8_t* get_raw() const { return m_payload; }
 		uint8_t get_raw_length() const { return 255; }
+		uint8_t get_packet_length() const { return m_get_fragment_end() + 2; }
 
 		// get the buffer
 		const uint8_t* payload() const { return &(m_payload[Structure::PAYLOAD]); }
 		uint8_t* payload() { return &(m_payload[Structure::PAYLOAD]); }
 		// get the length we're allowed to write
-		constexpr uint8_t get_write_count() { return 255 - (Structure::PAYLOAD + 2); }
+		uint8_t get_write_count() const { return 255 - (Structure::PAYLOAD + 2); }
 
 	private:
 		uint16_t m_framecheck_impl(const uint8_t frag_end) const { return FastCRC16().xmodem(m_payload, frag_end); }
@@ -133,7 +134,7 @@ namespace LoomNet {
 			const uint8_t* raw_payload,
 			const uint8_t length) {
 
-			Packet ret(PacketCtrl::DATA_TRANS, dst_addr);
+			Packet ret(PacketCtrl::DATA_TRANS, src_addr);
 			uint8_t* pkt = ret.payload();
 
 			auto count = ret.get_write_count();
@@ -176,8 +177,8 @@ namespace LoomNet {
 		uint8_t get_packet_length() const { return get_fragment_length() + Packet::Structure::PAYLOAD + 2; }
 
 		static Packet Factory(const uint16_t src_addr,
-			const TimeInterval data_interval,
-			const TimeInterval refresh_interval,
+			TimeInterval data_interval, // must be 8bits long
+			TimeInterval refresh_interval, // must be 16bits long
 			const uint8_t count) {
 
 			Packet ret(PacketCtrl::REFRESH_INITIAL, src_addr);

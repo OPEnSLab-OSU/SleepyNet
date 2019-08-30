@@ -21,13 +21,19 @@ public:
 		, m_length(0)
 		, m_start(0) {}
 
+	CircularBuffer<T, max_size>(const CircularBuffer& rhs)
+		: m_array{}
+		, m_start(0)
+		, m_length(0) {
+		for (const auto& elem : rhs) emplace_back(elem);
+	}
+
 	void reset() { for (auto& item : *this) item.~T(); m_length = 0; m_start = 0; }
 
 	~CircularBuffer<T, max_size>() {
 		reset();
 	}
 
-	CircularBuffer(CircularBuffer& c) = delete;
 	CircularBuffer& operator=(CircularBuffer& rhs) = delete;
 
 	/** misc functions */

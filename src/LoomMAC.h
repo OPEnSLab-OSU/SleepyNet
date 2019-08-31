@@ -1,7 +1,6 @@
 #pragma once
-#include <cstdint>
-#include <map>
-#include <array>
+#include <stdint.h>
+#include <limits.h>
 #include "LoomNetworkFragment.h"
 #include "LoomNetworkUtility.h"
 #include "LoomSlotter.h"
@@ -218,7 +217,9 @@ namespace LoomNet {
 		State check_for_data() {
 			if (m_state == State::MAC_DATA_WAIT) {
 				// check our network
-				const Packet& recv(m_radio.recv());
+				TimeInterval stamp(TIME_NONE);
+				const Packet& recv(m_radio.recv(stamp));
+				// if (recv.get_control() != PacketCtrl::NONE) Serial.println("Recieved packet!");
 				// check that the packet is not emptey, is not corrupted, and not from ourselves
 				if (recv.get_control() != PacketCtrl::NONE 
 					&& recv.check_packet(m_cur_send_addr) 
@@ -254,8 +255,7 @@ namespace LoomNet {
 					}
 					else {
 						// TODO: make error handling less brittle
-						m_last_error = Error::WRONG_PACKET_TYPE;
-						m_state = State::MAC_CLOSED;
+						m_halt_error(Error::WRONG_PACKET_TYPE);
 					}
 				}
 				else {
@@ -305,13 +305,13 @@ namespace LoomNet {
 			const uint32_t slots_until_refresh = (m_slot.get_total_slots() + CYCLE_GAP) * (CYCLES_PER_BATCH - 1) - CYCLE_GAP
 				+ BATCH_GAP + REFRESH_CYCLE_SLOTS;
 			// if we're a router or end device, just check and see if anyone has transmitted a signal
-			const TimeInterval time_now(m_radio.get_time());
 			// and if we haven't already (this should only happen on first power on) set the idle timestamp
 			if (m_time_idle_start.is_none()) 
-				m_time_idle_start = time_now;
+				m_time_idle_start = m_radio.get_time();
 			if (m_self_type != DeviceType::COORDINATOR) {
 				// check our "network"
-				const Packet& recv(m_radio.recv());
+				TimeInterval stamp(TIME_NONE);
+				const Packet& recv(m_radio.recv(stamp));
 				if (recv.get_control() != PacketCtrl::NONE) {
 					// guess we got a refresh packet!
 					// Additionally, we are supposed to do retransmission here, but I
@@ -321,8 +321,8 @@ namespace LoomNet {
 						&& recv.check_packet(m_self_addr)) {
 						const RefreshPacket& ref_frag = recv.as<RefreshPacket>();
 						// set the next data and refresh cycle based on the data
-						m_next_data = ref_frag.get_data_interval() + time_now;
-						m_next_refresh = ref_frag.get_refresh_interval() + time_now;
+						m_next_data = ref_frag.get_data_interval() + stamp;
+						m_next_refresh = ref_frag.get_refresh_interval() + stamp;
 						m_state = State::MAC_SLEEP_RDY;
 						m_radio.sleep();
 						// increment the slotter state, if we haven't already via sleep_wake_ack
@@ -338,8 +338,7 @@ namespace LoomNet {
 					if (m_next_refresh.is_none()) {
 						if (delta >= SLOT_LENGTH * (slots_until_refresh + REFRESH_CYCLE_SLOTS)) {
 							// first refresh didn't work, so hard fail
-							m_state = State::MAC_CLOSED;
-							m_last_error = Error::REFRESH_TIMEOUT;
+							m_halt_error(Error::REFRESH_TIMEOUT);
 						}
 					}
 					else if (delta >= refresh_cycle_length - (SLOT_LENGTH - RECV_TIMEOUT)) {
@@ -361,12 +360,11 @@ namespace LoomNet {
 				TimeInterval next_data_relative(SLOT_LENGTH * REFRESH_CYCLE_SLOTS);
 				TimeInterval next_refresh_relative(SLOT_LENGTH * slots_until_refresh);
 				// downcast both time intervals to the right sizes
-				next_data_relative.downcast<uint8_t>();
-				next_refresh_relative.downcast<uint16_t>();
+				next_data_relative.downcast(UCHAR_MAX);
+				next_refresh_relative.downcast(USHRT_MAX);
 				// error check our timing stuff
 				if (next_data_relative.is_none() || next_refresh_relative.is_none()) {
-					m_last_error = Error::REFRESH_PACKET_ERR;
-					m_state = State::MAC_CLOSED;
+					m_halt_error(Error::REFRESH_PACKET_ERR);
 					return;
 				}
 				// else send the packet!
@@ -375,6 +373,7 @@ namespace LoomNet {
 					next_refresh_relative,
 					0);
 				frag.set_framecheck();
+				const TimeInterval time_now(m_radio.get_time());
 				m_radio.send(frag);
 				// next state!
 				m_next_data = next_data_relative + time_now;
@@ -394,6 +393,19 @@ namespace LoomNet {
 		void m_send_ack() {
 			// send a regular ACK packet
 			m_radio.send(ACKPacket::Factory(m_self_addr));
+		}
+
+		void m_halt_error(const Error error) {
+			m_last_error = error;
+			m_state = State::MAC_CLOSED;
+			// turn off radio (safely)
+			switch (m_radio.get_state()) {
+			case Radio::State::IDLE:
+				m_radio.sleep();
+			case Radio::State::SLEEP:
+				m_radio.disable();
+			default: break;
+			}
 		}
 
 		Slotter m_slot;

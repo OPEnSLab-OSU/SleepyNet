@@ -1,20 +1,36 @@
 #pragma once
 
-#include <array>
-#include <type_traits>
-
 /**
  * Templated implementation of a fixed-size deque
  * To be used as a stack in Loom Network
  *
  */
 
+template<size_t Len, size_t Align>
+struct aligned_storage {
+	struct type {
+		alignas(Align) unsigned char data[Len];
+	};
+};
+
+#ifdef ARDUINO_ARCH_AVR
+// Default placement versions of operator new.
+inline void* operator new(size_t, void* __p) throw() { return __p; }
+inline void* operator new[](size_t, void* __p) throw() { return __p; }
+
+// Default placement versions of operator delete.
+inline void  operator delete  (void*, void*) throw() { }
+inline void  operator delete[](void*, void*) throw() {}
+#else
+#include <new>
+#endif
+
 template<typename T, size_t max_size>
 class CircularBuffer {
 public:
 
 	// create an aligned array type 
-	using array_t = typename std::aligned_storage<sizeof(T), alignof(T)>::type;
+	using array_t = typename aligned_storage<sizeof(T), alignof(T)>::type;
 
 	CircularBuffer<T, max_size>()
 		: m_array{}
@@ -23,9 +39,9 @@ public:
 
 	CircularBuffer<T, max_size>(const CircularBuffer& rhs)
 		: m_array{}
-		, m_start(0)
-		, m_length(0) {
-		for (const auto& elem : rhs) emplace_back(elem);
+		, m_length(0)
+		, m_start(0) {
+		for (const auto& elem : rhs) add_back(elem);
 	}
 
 	void reset() { for (auto& item : *this) item.~T(); m_length = 0; m_start = 0; }
@@ -74,7 +90,7 @@ public:
 			return false;
 		}
 		// construct the object in the correct place
-		new(&operator[](m_length)) T(std::forward<Args>(args)...);
+		new(&operator[](m_length)) T(args...);
 		// increment length
 		m_length++;
 		return true;
@@ -116,7 +132,7 @@ public:
 		if (m_start == 0) m_start = max_size - 1;
 		else m_start--;
 		// construct an object in the front spot
-		new(&operator[](0)) T(std::forward<Args>(args)...);
+		new(&operator[](0)) T(args...);
 		return true;
 	}
 
@@ -203,7 +219,7 @@ public:
 	}
 
 	/** destroy at index */
-	void remove(const CircularBuffer<T, max_size>::Iterator& iter) {
+	void remove(CircularBuffer<T, max_size>::Iterator& iter) {
 		// destroy the element
 		(*iter).~T();
 		// copy the memory over from the back or the front, whichever is closest

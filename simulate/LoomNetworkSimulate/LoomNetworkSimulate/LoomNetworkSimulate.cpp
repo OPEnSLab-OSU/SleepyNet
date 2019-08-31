@@ -200,6 +200,19 @@ int main()
 	std::cout << "begin testing Loom Network operation" << std::endl;
 	{
 		using namespace LoomNet;
+
+		// simulation five: simple net!
+		std::cout << "Begin simple network test!" << std::endl;
+		{
+			StaticJsonDocument<size> json;
+			deserializeJson(json, "{\"root\":{\"name\":\"BillyTheCoord\",\"sensor\":false,\"children\":[{\"name\":\"End Device 1\",\"type\":0,\"addr\":\"0x001\"},{\"name\":\"End Device 2\",\"type\":0,\"addr\":\"0x002\"},{\"name\":\"End Device 3\",\"type\":0,\"addr\":\"0x003\"},{\"name\":\"End Device 4\",\"type\":0,\"addr\":\"0x004\"}]}}");
+			const auto obj = json.as<JsonObjectConst>();
+			TestNetwork network(obj);
+
+			if (!test_network_operation(network, 0)) return false;
+		}
+		std::cout << "Simple network passed!" << std::endl;
+
 		std::cout << "begin idle test" << std::endl;
 		{
 			// run some simulations of the network!
@@ -269,18 +282,6 @@ int main()
 			if (!test_network_operation(network, 15)) return false;
 		}
 		std::cout << "Lossyer single send test passed!" << std::endl;
-
-		// simulation five: simple net!
-		std::cout << "Begin simple network test!" << std::endl;
-		{
-			StaticJsonDocument<size> json;
-			deserializeJson(json, "{\"config\":{\"cycles_per_refresh\":20},\"root\":{\"name\":\"BillyTheCoord\",\"sensor\":false,\"children\":[{\"name\":\"End Device 1\",\"type\":0,\"addr\":\"0x001\"},{\"name\":\"End Device 2\",\"type\":0,\"addr\":\"0x002\"},{\"name\":\"End Device 3\",\"type\":0,\"addr\":\"0x003\"},{\"name\":\"End Device 4\",\"type\":0,\"addr\":\"0x004\"}]}}");
-			const auto obj = json.as<JsonObjectConst>();
-			TestNetwork network(obj, TestNetwork::Verbosity::VERBOSE);
-
-			if (!test_network_operation(network, 15)) return false;
-		}
-		std::cout << "Simple network passed!" << std::endl;
 	}
 
 	std::cout << "end testing Loom Network operation" << std::endl;

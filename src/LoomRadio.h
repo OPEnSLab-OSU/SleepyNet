@@ -38,7 +38,7 @@ namespace LoomNet {
 
 		// once the radio is woke, any of the below functions can be called
 		// all operations are atomic and simply delay until they are complete
-		virtual Packet recv() = 0;
+		virtual Packet recv(TimeInterval& recv_stamp) = 0;
 		virtual void send(const Packet& send) = 0;
 	};
 

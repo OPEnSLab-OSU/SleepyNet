@@ -2,9 +2,7 @@
 #include "LoomNetworkInfo.h"
 #include "LoomNetworkUtility.h"
 #include <ArduinoJson.h>
-#include <cstdint>
-#include <limits>
-
+#include <stdint.h>
 /** 
  * Convert the Loom Network topology JSON into information used by the network
  * For now this will only populate LoomRouter with information, as LoomMAC has not been written.
@@ -165,8 +163,6 @@ namespace LoomNet {
 	NetworkInfo read_network_topology(const JsonObjectConst& topology, const char* self_name) {
 		// device type
 		DeviceType type = DeviceType::ERROR;
-		// layer
-		const uint8_t layer = 0;
 		// address
 		uint16_t address = ADDR_ERROR;
 		// parent
@@ -267,7 +263,7 @@ namespace LoomNet {
 			{
 				self_slot,
 				total_slots,
-				topology["config"]["cycles_per_refresh"] | LoomNet::CYCLES_PER_BATCH,
+				LoomNet::CYCLES_PER_BATCH,
 				send_slots,
 				child_slot,
 				child_slot_count

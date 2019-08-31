@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include "Arduino.h"
 #include "../LoomRadio.h"
 
@@ -9,6 +8,7 @@
 constexpr auto SLOT_LENGTH = 10000;
 constexpr auto WIRE_RECV_TIMEOUT = 1000;
 constexpr auto BIT_LENGTH = 4;
+constexpr auto SEND_DELAY = 100;
 
 namespace LoomNet {
     class WireRadio : public Radio {
@@ -20,16 +20,16 @@ namespace LoomNet {
             , m_recv_ind(recv_indicator_pin)
             , m_pwr_ind(pwr_indicator_pin) 
             , m_state(State::DISABLED)
-            , m_buffer{ 0 } {
+            , m_buffer{} {
                 // setup all pins to output and power low
-                pinMode(data_pin,           OUTPUT);
-                pinMode(send_indicator_pin,     OUTPUT);
-                pinMode(recv_indicator_pin, OUTPUT);
-                pinMode(pwr_indicator_pin,  OUTPUT);
-                digitalWrite(data_pin,           LOW);
-                digitalWrite(send_indicator_pin,     LOW);
-                digitalWrite(recv_indicator_pin, LOW);
-                digitalWrite(pwr_indicator_pin,  LOW);
+                pinMode(data_pin,                   OUTPUT);
+                pinMode(send_indicator_pin,         OUTPUT);
+                pinMode(recv_indicator_pin,         OUTPUT);
+                pinMode(pwr_indicator_pin,          OUTPUT);
+                digitalWrite(data_pin,              LOW);
+                digitalWrite(send_indicator_pin,    LOW);
+                digitalWrite(recv_indicator_pin,    LOW);
+                digitalWrite(pwr_indicator_pin,     LOW);
             }
 
         TimeInterval get_time() override { return TimeInterval(TimeInterval::MILLISECOND, millis()); }
@@ -58,21 +58,25 @@ namespace LoomNet {
             // turn power indicator on
             digitalWrite(m_pwr_ind, HIGH);
         }
-        LoomNet::Packet recv() override {
+        LoomNet::Packet recv(TimeInterval& recv_stamp) override {
             if (m_state != State::IDLE) 
                 Serial.println("Invalid radio state to recv");
             // turn recv indicator on
             digitalWrite(m_recv_ind, HIGH);
             // start reading the data pin
+            digitalWrite(m_data_pin, LOW);
             pinMode(m_data_pin, INPUT);
             // get the buffer ready
-            m_buffer.fill(0);
+            for (uint8_t i = 0; i < sizeof(m_buffer); i++) m_buffer[i] = 0;
             // check the slot for one second, since this is pretty high tolarance
             uint32_t start = millis();
             bool found = false;
             while (millis() - start < WIRE_RECV_TIMEOUT && !found) found = found || digitalRead(m_data_pin);
             // if we found something, start recieving it
             if (found) {
+                Serial.println("Found!");
+                // set the recv_stamp to when we first heard the signal
+                recv_stamp = get_time() - TimeInterval(TimeInterval::MILLISECOND, SEND_DELAY);
                 // delay half a bit so we can start reading the middle of the peaks
                 delay(1);
                 // read the "airwaves" 254 times!
@@ -88,7 +92,7 @@ namespace LoomNet {
             // set the pin back to output
             pinMode(m_data_pin, OUTPUT);
             // return data!
-            return LoomNet::Packet{ m_buffer.data(), static_cast<uint8_t>(m_buffer.size()) };
+            return LoomNet::Packet{ m_buffer, static_cast<uint8_t>(sizeof(m_buffer)) };
         }
         void send(const LoomNet::Packet& send) override {
             if (m_state != State::IDLE) 
@@ -96,9 +100,9 @@ namespace LoomNet {
             // turn on the indicator!
             digitalWrite(m_send_ind, HIGH);
             // wait a bit for the recieving device to initialize
-            delay(BIT_LENGTH);
+            delay(SEND_DELAY);
             // start writing to the "network"!
-            for (uint8_t i = 0; i < send.get_packet_length(); i++) {
+            for (uint8_t i = 0; i < send.get_raw_length(); i++) {
                 for (uint8_t b = 1;;) {
                     digitalWrite(m_data_pin, (send.get_raw()[i] & b) ? HIGH : LOW);
                     delay(BIT_LENGTH);
@@ -119,7 +123,7 @@ namespace LoomNet {
         const uint8_t m_recv_ind;
         const uint8_t m_pwr_ind;
         State m_state;
-        std::array<uint8_t, 255> m_buffer;
+        uint8_t m_buffer[255];
         uint32_t m_cur_time;
     };
 }

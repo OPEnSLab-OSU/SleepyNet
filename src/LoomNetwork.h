@@ -6,7 +6,8 @@
 #include "LoomMAC.h"
 #include "LoomNetworkInfo.h"
 #include "LoomRadio.h"
-#include <type_traits>
+#include "LoomNetworkConfig.h"
+// #include <type_traits>
 
 /**
  * Loom Network Layer
@@ -17,7 +18,7 @@ namespace LoomNet {
 	template<class RadioImpl, size_t send_buffer = 16U, size_t recv_buffer = 16U, size_t fingerprint_buffer = 32U>
 	class Network {
 
-		static_assert(std::is_base_of<Radio, RadioImpl>::value, "Radio implementation must conform to radio interface!");
+		// static_assert(std::is_base_of<Radio, RadioImpl>::value, "Radio implementation must conform to radio interface!");
 
 	public:
 		enum Status : uint8_t {
@@ -105,13 +106,13 @@ namespace LoomNet {
 					auto iter = m_buffer_send.crange().begin();
 					const auto end = m_buffer_send.crange().end();
 					for (; iter != end; ++iter) {
-						if ((*iter).first == addr) break;
+						if ((*iter).dst == addr) break;
 					}
 					// if there isn't any, send none and move on
 					if (!(iter != end)) m_mac.send_pass();
 					else {
 						// send, and if send succeded, destroy the item
-						if (m_mac.send_fragment((*iter).second)) {
+						if (m_mac.send_fragment((*iter).packet)) {
 							m_buffer_send.remove(iter);
 							// hey there's a new spot!
 							m_status |= Status::NET_SEND_RDY;
@@ -127,7 +128,7 @@ namespace LoomNet {
 			else if (mac_status == MAC::State::MAC_DATA_SEND_FAIL) {
 				// we always keep an open spot for a failed packet to pop back into
 				// if the packet doesn't insert for some reason, the network has broken
-				m_send_add({ m_mac.get_cur_send_address(), m_mac.get_staged_packet() });
+				m_send_add(m_mac.get_cur_send_address(), m_mac.get_staged_packet());
 			}
 			// if the mac has data ready to be copied, do that
 			else if (mac_status == MAC::State::MAC_DATA_RECV_RDY) {
@@ -136,7 +137,6 @@ namespace LoomNet {
 				DataPacket& data_frag = recv_frag.as<DataPacket>();
 				// if the fingerprint of this packet is contained in our buffer, drop it as
 				// it's a repeat
-				const uint16_t framecheck = recv_frag.calc_framecheck();
 				bool found = false;
 				for (const auto& elem : m_buffer_fingerprint.crange()) {
 					if (elem.src_addr == data_frag.get_orig_src()
@@ -163,7 +163,7 @@ namespace LoomNet {
 						if (nexthop == ADDR_ERROR || nexthop == ADDR_NONE)
 							return m_halt_error(Error::ROUTE_FAIL);
 						// push the packet to the send buffer, tagging it with the next hop address
-						m_send_add({ nexthop, recv_frag });
+						m_send_add(nexthop, recv_frag);
 					}
 				}
 			}
@@ -177,7 +177,7 @@ namespace LoomNet {
 
 		void app_send(const Packet& send) {
 			// push the send fragment into the buffer
-			m_send_add({ m_router.route(send.as<DataPacket>().get_dst()), send });
+			m_send_add(m_router.route(send.as<DataPacket>().get_dst()), send);
 			// move to the next rolling ID
 			if (m_rolling_id == 255) m_rolling_id = 0;
 			else m_rolling_id++;
@@ -185,7 +185,7 @@ namespace LoomNet {
 
 		void app_send(const uint16_t dst_addr, const uint8_t seq, const uint8_t* raw_payload, const uint8_t length) {
 			// push the send fragment into the buffer
-			m_send_add({
+			m_send_add(
 				m_router.route(dst_addr),
 				DataPacket::Factory(
 					dst_addr,
@@ -196,7 +196,7 @@ namespace LoomNet {
 					raw_payload,
 					length
 				)
-			});
+			);
 			// move to the next rolling ID
 			if (m_rolling_id == 255) m_rolling_id = 0;
 			else m_rolling_id++;
@@ -232,9 +232,9 @@ namespace LoomNet {
 		const Router& get_router() const { return m_router; }
 		const MAC& get_mac() const { return m_mac; }
 
-	// private:
-		void m_send_add(const std::pair<uint16_t, Packet>& elem) {
-			if (!m_buffer_send.emplace_back(elem)) m_halt_error(Error::SEND_BUF_FULL);
+	private:
+		void m_send_add(const uint16_t dst, const Packet& packet) {
+			if (!m_buffer_send.emplace_back(dst, packet)) m_halt_error(Error::SEND_BUF_FULL);
 			else if (m_buffer_send.size() < m_router.get_node_count()) m_status &= ~Status::NET_SEND_RDY;
 		}
 
@@ -252,6 +252,19 @@ namespace LoomNet {
 				m_status &= ~Status::NET_SLEEP_RDY;
 		}
 
+		struct PacketWithDst {
+			PacketWithDst(const uint16_t start_dst, const Packet& start_packet)
+				: dst(start_dst)
+				, packet(start_packet) {}
+
+			PacketWithDst(const PacketWithDst& rhs)
+				: dst(rhs.dst)
+				, packet(rhs.packet) {}
+
+			uint16_t dst;
+			Packet packet;
+		};
+
 		RadioImpl m_radio;
 		MAC m_mac;
 		Router m_router;
@@ -260,7 +273,7 @@ namespace LoomNet {
 
 		const uint16_t m_addr;
 		// TODO: Implement in terms of a binary tree
-		CircularBuffer<std::pair<uint16_t, Packet>, send_buffer> m_buffer_send;
+		CircularBuffer<PacketWithDst, send_buffer> m_buffer_send;
 		CircularBuffer<Packet, recv_buffer> m_buffer_recv;
 		CircularBuffer<PacketFingerprint, fingerprint_buffer> m_buffer_fingerprint;
 

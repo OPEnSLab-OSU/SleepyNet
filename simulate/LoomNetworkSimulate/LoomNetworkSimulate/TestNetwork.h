@@ -15,6 +15,7 @@
 #include <array>
 #include <utility>
 #include <random>
+#include <map>
 
 class NulStreambuf : public std::streambuf
 {
@@ -59,9 +60,10 @@ public:
 			std::cout << "Invalid radio state movement in wake()" << std::endl;
 		m_state = State::IDLE;
 	}
-	LoomNet::Packet recv() override {
+	LoomNet::Packet recv(LoomNet::TimeInterval& recv_stamp) override {
 		if (m_state != State::IDLE) 
 			std::cout << "Invalid radio state to recv" << std::endl;
+		recv_stamp = get_time();
 		return LoomNet::Packet{ m_airwaves.data(), static_cast<uint8_t>(m_airwaves.size()) };
 	}
 	void send(const LoomNet::Packet& send) override {

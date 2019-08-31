@@ -1,7 +1,11 @@
 #pragma once
 
-#include <cstdint>
+#include <stdint.h>
+#ifdef ARDUINO
+#include "FastCRC.h"
+#else
 #include "../simulate/LoomNetworkSimulate/LoomNetworkSimulate/FastCRC.h"
+#endif
 #include "LoomNetworkUtility.h"
 /**
  * Data types for Loom Network Packets
@@ -48,9 +52,9 @@ namespace LoomNet {
 		// upcast! Convert this packet to a reference of a specific packet type
 		// so we can safely access the data
 		template<class PacketType> 
-		const typename std::enable_if<std::is_base_of<Packet, PacketType>::value, PacketType>::type& as() const { return *reinterpret_cast<const PacketType*>(this); }
+		const PacketType& as() const { return *reinterpret_cast<const PacketType*>(this); }
 		template<class PacketType>
-		typename std::enable_if<std::is_base_of<Packet, PacketType>::value, PacketType>::type& as() { return *reinterpret_cast<PacketType*>(this); }
+		PacketType& as() { return *reinterpret_cast<PacketType*>(this); }
 
 		// calculate frame control sequence
 		// run this function right before the packet is sent, to ensure it is correct
@@ -84,6 +88,7 @@ namespace LoomNet {
 		}
 		const uint8_t* get_raw() const { return m_payload; }
 		uint8_t get_raw_length() const { return 255; }
+		// TODO: this is broken
 		uint8_t get_packet_length() const { return m_get_fragment_end() + 2; }
 
 		// get the buffer

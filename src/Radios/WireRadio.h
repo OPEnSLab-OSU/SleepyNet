@@ -5,10 +5,10 @@
 
 /** A simple testing radio, using a wire as airwaves */
 
-constexpr auto SLOT_LENGTH = 10000;
-constexpr auto WIRE_RECV_TIMEOUT = 1000;
-constexpr auto BIT_LENGTH = 4;
-constexpr auto SEND_DELAY = 100;
+constexpr auto SLOT_LENGTH_MILLIS = 10000;
+constexpr auto SEND_DELAY_MILLIS = 500;
+constexpr auto WIRE_RECV_TIMEOUT_MILLIS = 1000 + SEND_DELAY_MILLIS;
+constexpr auto BIT_LENGTH = 400;
 
 namespace LoomNet {
     class WireRadio : public Radio {
@@ -21,12 +21,11 @@ namespace LoomNet {
             , m_pwr_ind(pwr_indicator_pin) 
             , m_state(State::DISABLED)
             , m_buffer{} {
-                // setup all pins to output and power low
-                pinMode(data_pin,                   OUTPUT);
+                // setup all pins to output and power low, except for data which needs to be input pullup
+                pinMode(data_pin,                   INPUT);
                 pinMode(send_indicator_pin,         OUTPUT);
                 pinMode(recv_indicator_pin,         OUTPUT);
                 pinMode(pwr_indicator_pin,          OUTPUT);
-                digitalWrite(data_pin,              LOW);
                 digitalWrite(send_indicator_pin,    LOW);
                 digitalWrite(recv_indicator_pin,    LOW);
                 digitalWrite(pwr_indicator_pin,     LOW);
@@ -63,55 +62,66 @@ namespace LoomNet {
                 Serial.println("Invalid radio state to recv");
             // turn recv indicator on
             digitalWrite(m_recv_ind, HIGH);
-            // start reading the data pin
-            digitalWrite(m_data_pin, LOW);
+            // set the pin to have a pullup resistor
             pinMode(m_data_pin, INPUT);
+            // start reading the data pin
             // get the buffer ready
             for (uint8_t i = 0; i < sizeof(m_buffer); i++) m_buffer[i] = 0;
             // check the slot for one second, since this is pretty high tolarance
             uint32_t start = millis();
             bool found = false;
-            while (millis() - start < WIRE_RECV_TIMEOUT && !found) found = found || digitalRead(m_data_pin);
+            while (millis() - start < WIRE_RECV_TIMEOUT_MILLIS && !found) found = found || (digitalRead(m_data_pin) == LOW);
             // if we found something, start recieving it
             if (found) {
                 Serial.println("Found!");
                 // set the recv_stamp to when we first heard the signal
-                recv_stamp = get_time() - TimeInterval(TimeInterval::MILLISECOND, SEND_DELAY);
+                recv_stamp = get_time() - TimeInterval(TimeInterval::MILLISECOND, SEND_DELAY_MILLIS);
                 // delay half a bit so we can start reading the middle of the peaks
-                delay(1);
+                delayMicroseconds(100);
                 // read the "airwaves" 254 times!
                 for (uint8_t i = 0; i < 255; i++) {
                     for (uint8_t b = 0; b < 8; b++) {
-                        m_buffer[i] |= (digitalRead(m_data_pin) == HIGH ? 1 : 0) << b;
-                        delay(BIT_LENGTH);
+                        m_buffer[i] |= (digitalRead(m_data_pin) == LOW ? 1 : 0) << b;
+                        delayMicroseconds(BIT_LENGTH);
                     }
                 }
+                Serial.print("Got: ");
+                for (uint8_t i = 0; i < 255; i++) {
+                    Serial.print("0x");
+                    if (m_buffer[i] <= 0x0F) Serial.print('0');
+                    Serial.print(m_buffer[i], HEX);
+                    Serial.print(", ");
+                }
+                Serial.println();
             }
+            // reset the data pin
+            pinMode(m_data_pin, INPUT);
             // reset the indicator
             digitalWrite(m_recv_ind, LOW);
-            // set the pin back to output
-            pinMode(m_data_pin, OUTPUT);
             // return data!
             return LoomNet::Packet{ m_buffer, static_cast<uint8_t>(sizeof(m_buffer)) };
         }
         void send(const LoomNet::Packet& send) override {
             if (m_state != State::IDLE) 
                 Serial.println("Invalid radio state to recv");
+            // wait a bit for the recieving device to initialize
+            delayMicroseconds(SEND_DELAY_MILLIS * 1000);
             // turn on the indicator!
             digitalWrite(m_send_ind, HIGH);
-            // wait a bit for the recieving device to initialize
-            delay(SEND_DELAY);
+            // initialize our data pin to output low, to send a leading one
+            pinMode(m_data_pin, OUTPUT);
             // start writing to the "network"!
             for (uint8_t i = 0; i < send.get_raw_length(); i++) {
                 for (uint8_t b = 1;;) {
-                    digitalWrite(m_data_pin, (send.get_raw()[i] & b) ? HIGH : LOW);
-                    delay(BIT_LENGTH);
+                    digitalWrite(m_data_pin, (send.get_raw()[i] & b) ? LOW : HIGH);
+                    delayMicroseconds(BIT_LENGTH);
                     if (b == 0x80) break;
                     b <<= 1;
                 }
             }
-            // turn the pin off
-            digitalWrite(m_data_pin, LOW);
+            // reset the data pin
+            digitalWrite(m_data_pin, HIGH);
+            digitalWrite(m_data_pin, INPUT);
             // we're all done!
             digitalWrite(m_send_ind, LOW);
         }

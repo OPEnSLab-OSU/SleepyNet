@@ -157,7 +157,7 @@ public:
 		m_print(Verbosity::VERBOSE) << "Slot: " << std::dec << cur_slot << std::endl;
 		// wake all the devices that scheduled a wakeup now
 		m_print(Verbosity::VERBOSE) << "	Woke: ";
-		auto woke_count = 0;
+		unsigned int woke_count = 0;
 		for (uint8_t o = 0; o < devices.size(); o++) {
 			if (devices[o].get_status() & NetStatus::NET_SLEEP_RDY) {
 				if (cur_slot * LoomNet::SLOT_LENGTH.get_time() >= next_wake_times[o]) {
@@ -240,7 +240,7 @@ public:
 					m_print(Verbosity::VERBOSE) << "		Status of 0x" << std::hex << std::setfill('0') << std::setw(4) << devices[i].get_router().get_self_addr() << ": " << std::bitset<8>(devices[i].get_status()) << std::endl;
 					// if it wants to go to sleep now, add the time to the wake times
 					if (new_status & NetStatus::NET_SLEEP_RDY) {
-						next_wake_times[i] = devices[i].net_sleep_next_wake_time().get_time() + cur_slot * LoomNet::SLOT_LENGTH.get_time() + cur_loop;
+						next_wake_times[i] = devices[i].net_sleep_next_wake_time().get_time();
 					}
 					else all_sleep = false;
 				}

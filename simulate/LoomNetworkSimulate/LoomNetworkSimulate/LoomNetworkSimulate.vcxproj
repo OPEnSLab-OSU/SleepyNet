@@ -154,7 +154,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\src\LoomNetworkUtility.cpp" />
     <ClCompile Include="FastCRChw.cpp" />
     <ClCompile Include="FastCRCsw.cpp" />
     <ClCompile Include="LoomNetworkSimulate.cpp" />

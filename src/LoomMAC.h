@@ -113,7 +113,7 @@ namespace LoomNet {
 			}
 			else m_state = State::MAC_CLOSED;
 			// reset the wake time to what it's supposed to be
-			m_time_wake_start + m_time_wake_start + sleep_next_wake_time();
+			m_time_wake_start = sleep_next_wake_time();
 			// move the slotter forward
 			m_slot.next_state();
 		}
@@ -251,7 +251,7 @@ namespace LoomNet {
 				}
 				else {
 					if (recv.get_control() != PacketCtrl::NONE) {
-						// Serial.println("Discarded corrputed packet");
+						Serial.println("Discarded corrputed packet");
 					}
 					// check the timeout
 					// TODO: Implement in terms of real time units
@@ -296,7 +296,7 @@ namespace LoomNet {
 			// reset fail count since fail count is per batch
 			m_fail_count = 0;
 			// calculate the number of slots remaining until the next refresh using preconfigured values
-			const uint32_t slots_until_refresh = (m_slot.get_total_slots() + CYCLE_GAP) * (CYCLES_PER_BATCH - 1) - CYCLE_GAP
+			const uint32_t slots_until_refresh = (m_slot.get_total_slots() + CYCLE_GAP) * CYCLES_PER_BATCH - CYCLE_GAP
 				+ BATCH_GAP + REFRESH_CYCLE_SLOTS;
 			// if we're a router or end device, just check and see if anyone has transmitted a signal
 			// and if we haven't already (this should only happen on first power on) set the idle timestamp

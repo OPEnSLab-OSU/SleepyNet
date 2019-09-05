@@ -66,7 +66,7 @@ namespace LoomNet {
 					// else if we're a coordinator, we need to also increment the cycle count since we don't
 					// have a sending phase
 					else {
-						if (++m_cur_cycle == m_cycles_per_refresh - 1) {
+						if (++m_cur_cycle == m_cycles_per_refresh) {
 							m_cur_cycle = 0;
 							m_state = State::SLOT_WAIT_REFRESH;
 						}
@@ -80,7 +80,7 @@ namespace LoomNet {
 			// else we were waiting to transmit, so move to the next cycle
 			else if (m_state == State::SLOT_SEND || m_state == State::SLOT_SEND_W_SYNC) {
 				if (++m_cur_device == m_send_count) {
-					if (++m_cur_cycle == m_cycles_per_refresh - 1) {
+					if (++m_cur_cycle == m_cycles_per_refresh) {
 						m_cur_cycle = 0;
 						m_state = State::SLOT_WAIT_REFRESH;
 					}

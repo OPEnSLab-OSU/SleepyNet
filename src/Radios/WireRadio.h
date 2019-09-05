@@ -31,7 +31,7 @@ namespace LoomNet {
                 digitalWrite(pwr_indicator_pin,     LOW);
             }
 
-        TimeInterval get_time() override { return TimeInterval(TimeInterval::MILLISECOND, millis()); }
+        TimeInterval get_time() const override { return TimeInterval(TimeInterval::MILLISECOND, millis()); }
         State get_state() const override { return m_state; }
         void enable() override {
             if (m_state != State::DISABLED) 
@@ -62,8 +62,6 @@ namespace LoomNet {
                 Serial.println("Invalid radio state to recv");
             // turn recv indicator on
             digitalWrite(m_recv_ind, HIGH);
-            // set the pin to have a pullup resistor
-            pinMode(m_data_pin, INPUT);
             // start reading the data pin
             // get the buffer ready
             for (uint8_t i = 0; i < sizeof(m_buffer); i++) m_buffer[i] = 0;
@@ -94,8 +92,6 @@ namespace LoomNet {
                 }
                 Serial.println();
             }
-            // reset the data pin
-            pinMode(m_data_pin, INPUT);
             // reset the indicator
             digitalWrite(m_recv_ind, LOW);
             // return data!
@@ -111,6 +107,7 @@ namespace LoomNet {
             // initialize our data pin to output low, to send a leading one
             pinMode(m_data_pin, OUTPUT);
             // start writing to the "network"!
+            // TODO: packet_length?
             for (uint8_t i = 0; i < send.get_raw_length(); i++) {
                 for (uint8_t b = 1;;) {
                     digitalWrite(m_data_pin, (send.get_raw()[i] & b) ? LOW : HIGH);
@@ -121,7 +118,8 @@ namespace LoomNet {
             }
             // reset the data pin
             digitalWrite(m_data_pin, HIGH);
-            digitalWrite(m_data_pin, INPUT);
+            // reset the pin
+            pinMode(m_data_pin, INPUT);
             // we're all done!
             digitalWrite(m_send_ind, LOW);
         }

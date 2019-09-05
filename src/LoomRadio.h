@@ -19,7 +19,7 @@ namespace LoomNet {
 		};
 
 		// the radio needs to keep time, as does the rest of the network
-		virtual TimeInterval get_time() = 0;
+		virtual TimeInterval get_time() const = 0;
 		// get the radio state
 		virtual State get_state() const = 0;
 		// initialize and configure the radio

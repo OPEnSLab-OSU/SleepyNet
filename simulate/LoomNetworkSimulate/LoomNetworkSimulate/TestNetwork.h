@@ -38,7 +38,7 @@ public:
 		, m_drop_rate(drop_rate)
 		, m_state(State::DISABLED) {}
 
-	LoomNet::TimeInterval get_time() override { return { LoomNet::SLOT_LENGTH.get_unit(), m_cur_slot * LoomNet::SLOT_LENGTH.get_time() + m_cur_loop }; }
+	LoomNet::TimeInterval get_time() const override { return { LoomNet::SLOT_LENGTH.get_unit(), m_cur_slot * LoomNet::SLOT_LENGTH.get_time() + m_cur_loop }; }
 	LoomNet::Radio::State get_state() const override { return m_state; }
 	void enable() override {
 		if (m_state != State::DISABLED) 
@@ -71,7 +71,7 @@ public:
 			std::cout << "Invalid radio state to recv" << std::endl;
 		if (m_drop_rate == 0
 			|| std::uniform_int_distribution<int>(0, 99)(m_rand) > m_drop_rate)
-			for (auto i = 0; i < send.get_raw_length(); i++) m_airwaves[i] = send.get_raw()[i];
+			for (auto i = 0; i < send.get_packet_length(); i++) m_airwaves[i] = send.get_raw()[i];
 		else m_airwaves.fill(0);
  	}
 

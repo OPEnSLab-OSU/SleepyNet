@@ -45,7 +45,7 @@ void test_route(const LoomNet::Router r1, const uint16_t dst, const uint16_t che
 // test every device sending to every device!
 bool test_network_operation(TestNetwork& network, const int drop_rate) {
 	// get past the refresh cycle first
-	for (auto i = 0; i < 5; i++) network.next_slot();
+	for (auto i = 0; i < LoomNet::REFRESH_CYCLE_SLOTS; i++) network.next_slot();
 	// start your engines!
 	network.set_drop_rate(drop_rate);
 	// for every combination of addressi
@@ -207,7 +207,7 @@ int main()
 			StaticJsonDocument<size> json;
 			deserializeJson(json, "{\"root\":{\"name\":\"BillyTheCoord\",\"sensor\":false,\"children\":[{\"name\":\"End Device 1\",\"type\":0,\"addr\":\"0x001\"},{\"name\":\"End Device 2\",\"type\":0,\"addr\":\"0x002\"},{\"name\":\"End Device 3\",\"type\":0,\"addr\":\"0x003\"},{\"name\":\"End Device 4\",\"type\":0,\"addr\":\"0x004\"}]}}");
 			const auto obj = json.as<JsonObjectConst>();
-			TestNetwork network(obj);
+			TestNetwork network(obj, TestNetwork::Verbosity::VERBOSE);
 
 			if (!test_network_operation(network, 0)) return false;
 		}

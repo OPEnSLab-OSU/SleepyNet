@@ -58,38 +58,39 @@ namespace LoomNet {
 
 		// calculate frame control sequence
 		// run this function right before the packet is sent, to ensure it is correct
-		// calculate frame control sequence
-		// run this function right before the packet is sent, to ensure it is correct
 		uint16_t calc_framecheck() const {
 			const uint8_t endpos = m_get_fragment_end();
-			if (endpos == 0) return 0;
+			if (endpos == 0 || get_control() == PacketCtrl::DATA_ACK) return 0;
 			return m_framecheck_impl(endpos);
 		}
 
 		void set_framecheck() {
-			const uint8_t endpos = m_get_fragment_end();
-			if (endpos != 0) {
-				const uint16_t check = m_framecheck_impl(endpos);
-				m_payload[endpos] = static_cast<uint8_t>(check & 0xff);
-				m_payload[endpos + 1] = static_cast<uint8_t>(check >> 8);
+			if (get_control() == PacketCtrl::DATA_ACK) set_error();
+			else {
+				const uint8_t endpos = m_get_fragment_end();
+				if (endpos == 0) set_error();
+				else {
+					const uint16_t check = m_framecheck_impl(endpos);
+					m_payload[endpos] = static_cast<uint8_t>(check & 0xff);
+					m_payload[endpos + 1] = static_cast<uint8_t>(check >> 8);
+				}
 			}
-			else set_error();
 		}
 		// run this function right after the packet has been recieved to verify the packet
-		// run this function right after the packet has been recieved to verify the packet
 		bool check_packet(const uint16_t expected_src = ADDR_NONE) const {
-			const uint8_t endpos = m_get_fragment_end();
-			if (endpos != 0) {
+			if (get_control() != PacketCtrl::DATA_ACK) {
+				const uint8_t endpos = m_get_fragment_end();
+				if (endpos == 0) return false;
 				const uint16_t stored_check = static_cast<uint16_t>(m_payload[endpos]) | static_cast<uint16_t>(m_payload[endpos + 1]) << 8;
-				return m_framecheck_impl(endpos) == stored_check;
+				const uint16_t calc_check = m_framecheck_impl(endpos);
+				return calc_check != 0 && calc_check == stored_check;
 			}
 			// only applies to ACK packets
 			return get_src() == expected_src;
 		}
 		const uint8_t* get_raw() const { return m_payload; }
 		uint8_t get_raw_length() const { return 255; }
-		// TODO: this is broken
-		uint8_t get_packet_length() const { return m_get_fragment_end() + 2; }
+		uint8_t get_packet_length() const { return get_control() == PacketCtrl::DATA_ACK ? m_get_fragment_end() : m_get_fragment_end() + 2; }
 
 		// get the buffer
 		const uint8_t* payload() const { return &(m_payload[Structure::PAYLOAD]); }
@@ -216,11 +217,11 @@ namespace LoomNet {
 
 		if (ctrl == PacketCtrl::DATA_ACK_W_DATA
 			|| ctrl == PacketCtrl::DATA_TRANS) return Structure::PAYLOAD + as<DataPacket>().get_fragment_length();
-		else if (ctrl == PacketCtrl::REFRESH_INITIAL) return Structure::PAYLOAD + as<RefreshPacket>().get_fragment_length();
-		else if (ctrl == PacketCtrl::REFRESH_ADDITONAL) /* TODO */ return 0;
+		if (ctrl == PacketCtrl::REFRESH_INITIAL) return Structure::PAYLOAD + as<RefreshPacket>().get_fragment_length();
+		if (ctrl == PacketCtrl::REFRESH_ADDITONAL) /* TODO */ return 0;
 		// ACK doesn't have a framecheck
-		else if (ctrl == PacketCtrl::DATA_ACK) return 0;
-		else return 0;
+		if (ctrl == PacketCtrl::DATA_ACK) return Structure::PAYLOAD;
+		return 0;
 	}
 
 	struct PacketFingerprint {

@@ -74,6 +74,7 @@ namespace LoomNet {
 		}
 
 		TimeInterval net_sleep_next_wake_time() const { return m_mac.sleep_next_wake_time(); }
+		TimeInterval net_sleep_next_wake_time_rel() const { return m_mac.sleep_next_wake_time() - m_radio.get_time(); }
 		
 		void net_sleep_wake_ack() {
 			// if there's an error in the machine, we have to wait for it to be cleared

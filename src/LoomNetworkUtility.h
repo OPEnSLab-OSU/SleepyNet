@@ -222,8 +222,8 @@ namespace LoomNet {
 
 	// debug stuff for simulation
 	// TODO: replace this stuff with real numbers
-	// TODO: CYCLES_PER_BATCH cannot change without the network hanging for some reason
-	constexpr uint8_t CYCLES_PER_BATCH = 5;
+	// TODO: CYCLES_PER_BATCH cannot be less than two
+	constexpr uint8_t CYCLES_PER_BATCH = 2;
 	constexpr uint8_t CYCLE_GAP = 1;
 	const TimeInterval SLOT_LENGTH(TimeInterval::Unit::SECOND, 10);
 	const TimeInterval RECV_TIMEOUT(TimeInterval::Unit::SECOND, 3);

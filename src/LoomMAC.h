@@ -251,7 +251,7 @@ namespace LoomNet {
 				}
 				else {
 					if (recv.get_control() != PacketCtrl::NONE) {
-						Serial.println("Discarded corrputed packet");
+						// Serial.println("Discarded corrputed packet");
 					}
 					// check the timeout
 					// TODO: Implement in terms of real time units

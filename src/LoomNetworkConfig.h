@@ -160,6 +160,13 @@ static uint8_t m_count_slots_layer_call(const JsonObjectConst& obj, const uint8_
 }
 
 namespace LoomNet {
+
+	uint16_t get_addr(const JsonObjectConst& topology, const char* name) {
+		JsonObjectConst obj;
+		uint8_t depth = 0;
+		return m_recurse_traverse(topology["root"], name, obj, depth);
+	}
+
 	NetworkInfo read_network_topology(const JsonObjectConst& topology, const char* self_name) {
 		// device type
 		DeviceType type = DeviceType::ERROR;

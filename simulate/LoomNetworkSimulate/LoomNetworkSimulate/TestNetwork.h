@@ -30,7 +30,7 @@ protected:
 
 class TestRadio : public LoomNet::Radio {
 public:
-	TestRadio(std::array<uint8_t, 255> & airwaves, const size_t& cur_slot, const size_t& cur_loop, std::default_random_engine& rand, const int& drop_rate)
+	TestRadio(std::array<uint8_t, LoomNet::PACKET_MAX> & airwaves, const size_t& cur_slot, const size_t& cur_loop, std::default_random_engine& rand, const int& drop_rate)
 		: m_airwaves(airwaves)
 		, m_cur_slot(cur_slot)
 		, m_cur_loop(cur_loop)
@@ -76,7 +76,7 @@ public:
  	}
 
 private:
-	std::array<uint8_t, 255>& m_airwaves;
+	std::array<uint8_t, LoomNet::PACKET_MAX>& m_airwaves;
 	const size_t& m_cur_slot;
 	const size_t& m_cur_loop;
 	std::default_random_engine& m_rand;
@@ -306,7 +306,7 @@ public:
 		else return null_stream;
 	}
 
-	std::array<uint8_t, 255> airwaves;
+	std::array<uint8_t, LoomNet::PACKET_MAX> airwaves;
 	size_t cur_slot;
 	size_t cur_loop;
 	int drop_rate;

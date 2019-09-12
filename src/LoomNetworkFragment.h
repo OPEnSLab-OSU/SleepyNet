@@ -89,20 +89,20 @@ namespace LoomNet {
 			return get_src() == expected_src;
 		}
 		const uint8_t* get_raw() const { return m_payload; }
-		uint8_t get_raw_length() const { return 255; }
+		uint8_t get_raw_length() const { return LoomNet::PACKET_MAX; }
 		uint8_t get_packet_length() const { return get_control() == PacketCtrl::DATA_ACK ? m_get_fragment_end() : m_get_fragment_end() + 2; }
 
 		// get the buffer
 		const uint8_t* payload() const { return &(m_payload[Structure::PAYLOAD]); }
 		uint8_t* payload() { return &(m_payload[Structure::PAYLOAD]); }
 		// get the length we're allowed to write
-		uint8_t get_write_count() const { return 255 - (Structure::PAYLOAD + 2); }
+		uint8_t get_write_count() const { return LoomNet::PACKET_MAX - (Structure::PAYLOAD + 2); }
 
 	private:
 		uint16_t m_framecheck_impl(const uint8_t frag_end) const { return FastCRC16().xmodem(m_payload, frag_end); }
 		uint8_t m_get_fragment_end() const;
 
-		uint8_t m_payload[255];
+		uint8_t m_payload[LoomNet::PACKET_MAX];
 	};
 
 	class DerivedPacket : public Packet {

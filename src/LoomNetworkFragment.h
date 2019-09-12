@@ -89,14 +89,17 @@ namespace LoomNet {
 			return get_src() == expected_src;
 		}
 		const uint8_t* get_raw() const { return m_payload; }
+		uint8_t* get_raw() { return m_payload; }
 		uint8_t get_raw_length() const { return LoomNet::PACKET_MAX; }
 		uint8_t get_packet_length() const { return get_control() == PacketCtrl::DATA_ACK ? m_get_fragment_end() : m_get_fragment_end() + 2; }
 
+		// get the length we're allowed to write
+		uint8_t get_write_count() const { return LoomNet::PACKET_MAX - (Structure::PAYLOAD + 2); }
+
+	protected:
 		// get the buffer
 		const uint8_t* payload() const { return &(m_payload[Structure::PAYLOAD]); }
 		uint8_t* payload() { return &(m_payload[Structure::PAYLOAD]); }
-		// get the length we're allowed to write
-		uint8_t get_write_count() const { return LoomNet::PACKET_MAX - (Structure::PAYLOAD + 2); }
 
 	private:
 		uint16_t m_framecheck_impl(const uint8_t frag_end) const { return FastCRC16().xmodem(m_payload, frag_end); }
@@ -111,7 +114,7 @@ namespace LoomNet {
 		DerivedPacket& operator=(const DerivedPacket&) = delete;
 	};
 
-	class DataPacket : public DerivedPacket {
+	class DataPacket : public Packet {
 	public:
 		enum Structure {
 			FRAME_LEN = 0,
@@ -141,7 +144,7 @@ namespace LoomNet {
 			const uint8_t length) {
 
 			Packet ret(PacketCtrl::DATA_TRANS, src_addr);
-			uint8_t* pkt = ret.payload();
+			uint8_t* pkt = &(ret.get_raw()[Packet::PAYLOAD]);
 
 			auto count = ret.get_write_count();
 			const auto frag_len = length + Structure::PAYLOAD;
@@ -188,7 +191,7 @@ namespace LoomNet {
 			const uint8_t count) {
 
 			Packet ret(PacketCtrl::REFRESH_INITIAL, src_addr);
-			uint8_t* pkt = ret.payload();
+			uint8_t* pkt = &(ret.get_raw()[Packet::PAYLOAD]);
 			auto pkt_count = ret.get_write_count();
 			// overflow check
 			if (6 > pkt_count) ret.set_error();

@@ -6,9 +6,9 @@
 /** A simple testing radio, using a wire as airwaves */
 
 constexpr auto SLOT_LENGTH_MILLIS = 10000;
-constexpr auto SEND_DELAY_MILLIS = 200;
+constexpr auto SEND_DELAY_MILLIS = 500;
 constexpr auto WIRE_RECV_TIMEOUT_MILLIS = 500 + SEND_DELAY_MILLIS;
-constexpr auto BIT_LENGTH = 100; // MUST BE DIVISIBLE BY 4
+constexpr auto BIT_LENGTH = 400; // MUST BE DIVISIBLE BY 4
 
 namespace LoomNet {
     class WireRadio : public Radio {
@@ -25,24 +25,49 @@ namespace LoomNet {
             , m_recv_ind(recv_indicator_pin)
             , m_pwr_ind(pwr_indicator_pin) 
             , m_state(State::DISABLED)
-            , m_buffer{} {
-                // setup all pins to output and power low, except for data which needs to be input pullup
-                pinMode(data_pin,                   INPUT);
-                pinMode(clk_pin,                    INPUT);
-                pinMode(send_indicator_pin,         OUTPUT);
-                pinMode(recv_indicator_pin,         OUTPUT);
-                pinMode(pwr_indicator_pin,          OUTPUT);
-                digitalWrite(send_indicator_pin,    LOW);
-                digitalWrite(recv_indicator_pin,    LOW);
-                digitalWrite(pwr_indicator_pin,     LOW);
-            }
+            , m_buffer{} {}
 
-        TimeInterval get_time() const override { return TimeInterval(TimeInterval::MILLISECOND, millis()); }
+        TimeInterval get_time() const override { 
+            // get time using the internal RTC counter!
+            RTC->MODE0.READREQ.reg = RTC_READREQ_RREQ;
+            while (RTC->MODE0.STATUS.bit.SYNCBUSY);
+            return TimeInterval(TimeInterval::Unit::MILLISECOND, RTC->MODE0.COUNT.bit.COUNT);
+        }
         State get_state() const override { return m_state; }
         void enable() override {
             if (m_state != State::DISABLED) 
                 Serial.println("Invalid radio state movement in enable()");
             m_state = State::SLEEP;
+            // setup all pins to output and power low, except for data which needs to be input pullup
+            pinMode(m_data_pin,                   INPUT);
+            pinMode(m_clk_pin,                    INPUT);
+            pinMode(m_send_ind,         OUTPUT);
+            pinMode(m_recv_ind,         OUTPUT);
+            pinMode(m_pwr_ind,          OUTPUT);
+            digitalWrite(m_send_ind,    LOW);
+            digitalWrite(m_recv_ind,    LOW);
+            digitalWrite(m_pwr_ind,     LOW);
+            // configure the internal RTC to act as our timer
+            // enable GCLK2 to ~976.5MHz
+            PM->APBAMASK.reg |= PM_APBAMASK_RTC; // turn on digital interface clock
+            GCLK->GENDIV.reg = GCLK_GENDIV_ID(2)|GCLK_GENDIV_DIV(12);
+            while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+            GCLK->GENCTRL.reg = (GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_ID(2) | GCLK_GENCTRL_DIVSEL );
+            while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
+            GCLK->CLKCTRL.reg = (uint32_t)((GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK2 | (RTC_GCLK_ID << GCLK_CLKCTRL_ID_Pos)));
+            while (GCLK->STATUS.bit.SYNCBUSY);
+            RTC->MODE2.CTRL.reg &= ~RTC_MODE0_CTRL_ENABLE; // disable RTC
+            while (RTC->MODE0.STATUS.bit.SYNCBUSY);
+            RTC->MODE2.CTRL.reg |= RTC_MODE0_CTRL_SWRST; // software reset
+            while (RTC->MODE0.STATUS.bit.SYNCBUSY);
+            RTC->MODE0.READREQ.reg &= ~RTC_READREQ_RCONT; // disable continuously mode
+            // tell the RTC to operate as a 32 bit counter
+            RTC->MODE0.CTRL.reg = RTC_MODE0_CTRL_MODE_COUNT32 | RTC_MODE0_CTRL_PRESCALER(0);
+            while (RTC->MODE0.STATUS.bit.SYNCBUSY);
+            RTC->MODE0.CTRL.reg |= RTC_MODE0_CTRL_ENABLE; // enable RTC
+            while (RTC->MODE0.STATUS.bit.SYNCBUSY);
+            RTC->MODE0.CTRL.reg &= ~RTC_MODE0_CTRL_SWRST; // software reset remove
+            while (RTC->MODE0.STATUS.bit.SYNCBUSY);
         }
         void disable() override {
             if (m_state != State::SLEEP) 
@@ -103,16 +128,16 @@ namespace LoomNet {
                         m_buffer[i] |= (digitalRead(m_data_pin) == LOW ? 1 : 0) << b;
                     }
                 }
-                Serial.print("Syncrhonization off by: ");
+                Serial.print("Off by: ");
                 Serial.println(sync_off);
-                Serial.print("Got: ");
+                /*Serial.print("Got: ");
                 for (uint8_t i = 0; i < sizeof(m_buffer); i++) {
                     Serial.print("0x");
                     if (m_buffer[i] <= 0x0F) Serial.print('0');
                     Serial.print(m_buffer[i], HEX);
                     Serial.print(", ");
                 }
-                Serial.println();
+                Serial.println();*/
             }
             // reset the indicator
             digitalWrite(m_recv_ind, LOW);

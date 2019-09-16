@@ -48,21 +48,20 @@ namespace LoomNet {
             digitalWrite(m_recv_ind,    LOW);
             digitalWrite(m_pwr_ind,     LOW);
             // configure the internal RTC to act as our timer
-            // enable GCLK2 to ~976.5MHz
+            RTC->MODE2.CTRL.reg &= ~RTC_MODE0_CTRL_ENABLE; // disable RTC
+            // while (RTC->MODE0.STATUS.bit.SYNCBUSY);
+            RTC->MODE2.CTRL.reg |= RTC_MODE0_CTRL_SWRST; // software reset
+            // while (RTC->MODE0.STATUS.bit.SYNCBUSY);
             PM->APBAMASK.reg |= PM_APBAMASK_RTC; // turn on digital interface clock
-            GCLK->GENDIV.reg = GCLK_GENDIV_ID(2)|GCLK_GENDIV_DIV(12);
+            GCLK->GENDIV.reg = GCLK_GENDIV_ID(2)|GCLK_GENDIV_DIV(5);
             while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
             GCLK->GENCTRL.reg = (GCLK_GENCTRL_GENEN | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_ID(2) | GCLK_GENCTRL_DIVSEL );
             while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY);
             GCLK->CLKCTRL.reg = (uint32_t)((GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK2 | (RTC_GCLK_ID << GCLK_CLKCTRL_ID_Pos)));
             while (GCLK->STATUS.bit.SYNCBUSY);
-            RTC->MODE2.CTRL.reg &= ~RTC_MODE0_CTRL_ENABLE; // disable RTC
-            while (RTC->MODE0.STATUS.bit.SYNCBUSY);
-            RTC->MODE2.CTRL.reg |= RTC_MODE0_CTRL_SWRST; // software reset
-            while (RTC->MODE0.STATUS.bit.SYNCBUSY);
             RTC->MODE0.READREQ.reg &= ~RTC_READREQ_RCONT; // disable continuously mode
             // tell the RTC to operate as a 32 bit counter
-            RTC->MODE0.CTRL.reg = RTC_MODE0_CTRL_MODE_COUNT32 | RTC_MODE0_CTRL_PRESCALER(0);
+            RTC->MODE0.CTRL.reg = RTC_MODE0_CTRL_MODE_COUNT32 | RTC_MODE0_CTRL_PRESCALER_DIV128;
             while (RTC->MODE0.STATUS.bit.SYNCBUSY);
             RTC->MODE0.CTRL.reg |= RTC_MODE0_CTRL_ENABLE; // enable RTC
             while (RTC->MODE0.STATUS.bit.SYNCBUSY);
@@ -92,7 +91,7 @@ namespace LoomNet {
             if (m_state != State::IDLE) 
                 Serial.println("Invalid radio state to recv");
             // check start for synchronization measurement
-            uint32_t recv_start = millis();
+            const auto recv_start = get_time();
             // turn recv indicator on
             digitalWrite(m_recv_ind, HIGH);
             // start reading the data pin
@@ -102,7 +101,7 @@ namespace LoomNet {
             const uint32_t start = millis();
             bool found = false;
             while (millis() - start < WIRE_RECV_TIMEOUT_MILLIS && !found) found = found || (digitalRead(m_clk_pin) == LOW);
-            const uint32_t sync_off = millis() - recv_start;
+            const auto sync_off = get_time() - recv_start;
             // if we found something, start recieving it
             if (found) {
                 // set the recv_stamp to when we first heard the signal
@@ -129,7 +128,7 @@ namespace LoomNet {
                     }
                 }
                 Serial.print("Off by: ");
-                Serial.println(sync_off);
+                Serial.println(sync_off.get_time());
                 /*Serial.print("Got: ");
                 for (uint8_t i = 0; i < sizeof(m_buffer); i++) {
                     Serial.print("0x");

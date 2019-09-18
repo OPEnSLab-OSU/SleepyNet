@@ -3,7 +3,7 @@
 #include "Arduino.h"
 #include "../LoomRadio.h"
 #include <SPI.h>
-#include <RH_RF69.h>
+#include "RF95.h"
 
 /** A more complicated testing radio, designed to be used with the RFM95 */
 
@@ -13,19 +13,20 @@ constexpr auto RFM95_RST = 4;
 constexpr auto RF95_FREQ = 915.0f;
 constexpr auto LED = 13;
 
+constexpr auto SEND_DELAY_MILLIS = 500;
 
 namespace LoomNet {
-    class WireRadio : public Radio {
+    class LoraRadio : public Radio {
     public:
 
-        WireRadio(const uint8_t send_indicator_pin, 
+        LoraRadio(const uint8_t send_indicator_pin, 
             const uint8_t recv_indicator_pin, 
             const uint8_t pwr_indicator_pin)
-            : m_rfm(RFM95_CS, RFM95_INT)
-            , m_send_ind(send_indicator_pin)
+            : m_send_ind(send_indicator_pin)
             , m_recv_ind(recv_indicator_pin)
             , m_pwr_ind(pwr_indicator_pin) 
-            , m_state(State::DISABLED) {}
+            , m_state(State::DISABLED)
+            , m_rfm(RFM95_CS, RFM95_INT) {}
 
         TimeInterval get_time() const override { 
             // get time using the internal RTC counter!
@@ -55,14 +56,15 @@ namespace LoomNet {
             delay(10);
             // init!
             if (!m_rfm.init()) Serial.println("No radio found!");
-            m_rfm.setFrequency(RFM_FREQ);
             m_rfm.setTxPower(5);
-            constexpr RH_RF95::ModemConfig config = { 
-                0b10010011, // implicit header on, 4/5 coding rate, 500kHz
-                0b10100011, // 1024 chirps/symbol, tx continous off, CRC off, 192 symbol timeout
+            constexpr RF95::ModemConfig config = { 
+                0b10010010, // explicit header on, 4/5 coding rate, 500kHz
+                0b10100000, // 1024 chirps/symbol, tx continous off, CRC off, 0 symbol timeout MSBs
                 0x04, // AGC on
-            }
-            m_rfm.setModemRegisters(&config);
+            };
+            m_rfm.setModemRegisters(config);
+            // put the modem into sleep mode until we need it later
+            m_rfm.setMode(RF95::RF_MODE::SLEEP);
             // configure the internal RTC to act as our timer
             RTC->MODE2.CTRL.reg &= ~RTC_MODE0_CTRL_ENABLE; // disable RTC
             // while (RTC->MODE0.STATUS.bit.SYNCBUSY);
@@ -93,7 +95,8 @@ namespace LoomNet {
             if (m_state != State::IDLE) 
                 Serial.println("Invalid radio state movement in sleep()");
             m_state = State::SLEEP;
-            // TODO: Lora sleep
+            // sleep radio!
+            m_rfm.setMode(RF95::RF_MODE::SLEEP);
             // turn power indicator off
             digitalWrite(m_pwr_ind, LOW);
         }
@@ -101,23 +104,31 @@ namespace LoomNet {
             if (m_state != State::SLEEP) 
                 Serial.println("Invalid radio state movement in wake()");
             m_state = State::IDLE;
-            // TODO: Lora wake
+            // wake the LoRa radio into standby mode
+            m_rfm.setMode(RF95::RF_MODE::IDLE);
             // turn power indicator on
             digitalWrite(m_pwr_ind, HIGH);
         }
         LoomNet::Packet recv(TimeInterval& recv_stamp) override {
+            uint8_t buf[PACKET_MAX] = {};
             if (m_state != State::IDLE) 
                 Serial.println("Invalid radio state to recv");
             // check start for synchronization measurement
             const auto recv_start = get_time();
             // turn recv indicator on
             digitalWrite(m_recv_ind, HIGH);
-            // TODO: Lora
-
+            // run a CAD check on the airwaves
+            if(m_rfm.checkRadio()) {
+                recv_stamp = get_time();
+                Serial.print("Off by: ");
+                Serial.println(recv_stamp.get_time() - recv_start.get_time());
+                // we found a packet! recieve it
+                m_rfm.recvSingle(buf, PACKET_MAX);
+            }
             // reset the indicator
             digitalWrite(m_recv_ind, LOW);
             // return data!
-            return LoomNet::Packet{ m_buffer, static_cast<uint8_t>(sizeof(m_buffer)) };
+            return LoomNet::Packet{ buf, static_cast<uint8_t>(sizeof(buf)) };
         }
         void send(const LoomNet::Packet& send) override {
             if (m_state != State::IDLE) 
@@ -127,7 +138,8 @@ namespace LoomNet {
             while(millis() - start < SEND_DELAY_MILLIS);
             // turn on the indicator!
             digitalWrite(m_send_ind, HIGH);
-            // TODO: Lora
+            // send the packet over LoRa!
+            m_rfm.sendSingle(send.get_raw(), send.get_packet_length());
             // we're all done!
             digitalWrite(m_send_ind, LOW);
         }
@@ -137,6 +149,6 @@ namespace LoomNet {
         const uint8_t m_recv_ind;
         const uint8_t m_pwr_ind;
         State m_state;
-        RF_RF95 m_rfm;
+        RF95 m_rfm;
     };
 }

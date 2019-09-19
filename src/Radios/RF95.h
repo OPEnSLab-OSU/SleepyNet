@@ -7,7 +7,9 @@
 
 /** A simplified version of the RH_RF95 driver, designed to be more low-level than RH */
 
-static const SPISettings RH_spi_props(1000000, MSBFIRST, SPI_MODE0);
+static constexpr auto INT_PIN_TIMEOUT = 200;
+
+static const SPISettings RH_spi_props/*(1000000, BitOrder::MSBFIRST, SPI_MODE0)*/;
 
 class RF95 {
 public:
@@ -86,7 +88,7 @@ public:
         setMode(RF_MODE::RX_CAD);
         m_spiWrite(RH_RF95_REG_40_DIO_MAPPING1, 0x80); // Interrupt on CadDone
         // wait for the interrupt pin to go high!
-        while(digitalRead(m_INT) == LOW);
+        if(!m_waitIntPin()) return false;
         // read the result
         // Read the interrupt register
         const uint8_t flags = m_spiRead(RH_RF95_REG_12_IRQ_FLAGS);
@@ -101,7 +103,7 @@ public:
         m_spiWrite(RH_RF95_REG_40_DIO_MAPPING1, 0x00); // Interrupt on RxDone
         // wait again for the device to finish recieving (or timeout)
         delay(10);
-        while(digitalRead(m_INT) == LOW);
+        if(!m_waitIntPin()) return false;
         // check the packet!
         const uint8_t flags = m_spiRead(RH_RF95_REG_12_IRQ_FLAGS);
         if (flags & RH_RF95_RX_TIMEOUT) {
@@ -136,7 +138,7 @@ public:
         setMode(RF_MODE::TX);
         m_spiWrite(RH_RF95_REG_40_DIO_MAPPING1, 0x40);
         // wait until the transmission is done
-        while(digitalRead(m_INT) == LOW);
+        m_waitIntPin();
         // set the device back into idle mode!
         setMode(RF_MODE::IDLE);
         // Clear all IRQ flags
@@ -214,6 +216,16 @@ public:
     }
 
 private:
+
+    bool m_waitIntPin() const {
+        const auto start = millis();
+        while (millis() - start < INT_PIN_TIMEOUT) 
+            if (digitalRead(m_INT) == HIGH) return true;
+        #ifdef SERIAL_DEBUG
+        Serial.println("Timed out waiting for lora interrupt pin!");
+        #endif
+        return false;
+    }
 
     uint8_t m_spiRead(const uint8_t reg) const
     {

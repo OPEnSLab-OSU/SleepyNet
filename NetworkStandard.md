@@ -278,6 +278,15 @@ Additionally, a radio shall have an implementation of a method to create unique 
 
 ```JSON
 {
+       "config": {
+              "cycles_per_batch": 2,
+              "cycle_gap": 1,
+              "batch_gap": 1,
+              "slot_length": {
+                     "unit": "SECOND",
+                     "time": 5
+              },
+       },
        "root" : {
               "name": "BillyTheCoord",
               "sensor": false,

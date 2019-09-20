@@ -20,24 +20,26 @@ namespace LoomNet {
 			SLOT_ERROR
 		};
 
-		Slotter(	const uint8_t send_slot, 
-					const uint8_t total_slots,
-					const uint8_t cycles_per_refresh,
-					const uint8_t send_count,
-					const uint8_t recv_slot, 
-					const uint8_t recv_count)
+		Slotter(	const uint8_t		send_slot, 
+					const uint8_t		total_slots,
+					const uint8_t		cycles_per_refresh,
+					const TimeInterval	slot_length,
+					const uint8_t		send_count,
+					const uint8_t		recv_slot, 
+					const uint8_t		recv_count)
 			: m_send_slot(send_slot)
 			, m_send_count(send_count)
 			, m_recv_slot(recv_slot)
 			, m_recv_count(recv_count)
 			, m_total_slots(total_slots)
 			, m_cycles_per_refresh(cycles_per_refresh)
+			, m_slot_length(slot_length)
 			, m_state(send_slot != SLOT_ERROR && recv_slot != SLOT_ERROR ? State::SLOT_WAIT_REFRESH : State::SLOT_ERROR)
 			, m_cur_cycle(0)
 			, m_cur_device(0) {}
 		
-		Slotter(const uint8_t send_slot, const uint8_t total_slots, const uint8_t cycles_per_refresh)
-			: Slotter(send_slot, total_slots, cycles_per_refresh, 1, SLOT_NONE, 0) {}
+		Slotter(const uint8_t send_slot, const uint8_t total_slots, const uint8_t cycles_per_refresh, const TimeInterval slot_length)
+			: Slotter(send_slot, total_slots, cycles_per_refresh, slot_length, 1, SLOT_NONE, 0) {}
 
 		bool operator==(const Slotter& rhs) const {
 			return (rhs.m_send_slot == m_send_slot)
@@ -97,7 +99,9 @@ namespace LoomNet {
 			return m_state;
 		}
 
-		uint8_t get_slot_wait() const {
+		TimeInterval get_slot_wait_time() const { return m_slot_length * get_slot_wait_slots(); }
+
+		uint8_t get_slot_wait_slots() const {
 			// if we're waiting for the first send slot in a cycle
 			if ((m_state == State::SLOT_SEND || m_state == State::SLOT_SEND_W_SYNC) && m_cur_device == 0) {
 				// if the device is an end device, wait for the send slot plus the cycle slot gap
@@ -137,6 +141,15 @@ namespace LoomNet {
 			return 0;
 		}
 
+		uint8_t get_refresh_slots() const {
+			// return the number of slots per refresh
+			return (get_total_slots() + CYCLE_GAP) * m_cycles_per_refresh - CYCLE_GAP + BATCH_GAP + REFRESH_CYCLE_SLOTS;
+		}
+
+		TimeInterval get_refresh_time() const {
+			return m_slot_length * get_refresh_slots();
+		}
+
 		void reset() {
 			m_state = State::SLOT_WAIT_REFRESH;
 			m_cur_cycle = 0;
@@ -145,18 +158,21 @@ namespace LoomNet {
 
 		uint8_t get_cur_data_cycle() const { return m_cur_cycle; }
 		uint8_t get_total_slots() const { return m_total_slots; }
+		TimeInterval get_slot_length() const { return m_slot_length; }
 
 	private:
+
 		const uint8_t m_send_slot;
 		const uint8_t m_send_count;
 		const uint8_t m_recv_slot;
 		const uint8_t m_recv_count;
 		const uint8_t m_total_slots;
 		const uint8_t m_cycles_per_refresh;
+		const TimeInterval m_slot_length;
 		State m_state;
 		uint8_t m_cur_cycle;
 		uint8_t m_cur_device;
 	};
 
-	const Slotter SLOTTER_ERROR = Slotter(SLOT_ERROR, 0, 0, 0, SLOT_ERROR, 0);
+	const Slotter SLOTTER_ERROR = Slotter(SLOT_ERROR, 0, 0, TIME_NONE, 0, SLOT_ERROR, 0);
 }

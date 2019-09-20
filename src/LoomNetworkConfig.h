@@ -159,6 +159,26 @@ static uint8_t m_count_slots_layer_call(const JsonObjectConst& obj, const uint8_
 	return m_count_slots_layer(obj, layer, self_name, self_type, found_device);
 }
 
+static LoomNet::TimeInterval m_json_to_time(const JsonObjectConst& obj) {
+	const uint32_t time = obj["time"] | 0;
+	if (!time) return LoomNet::TIME_NONE;
+	const char* unit_str = obj["unit"];
+	if (!unit_str) return LoomNet::TIME_NONE;
+	// convert the unit string into the unit enumeration
+	constexpr auto UNIT_MAX_LEN = 15;
+	using Unit = LoomNet::TimeInterval::Unit;
+	Unit unit = Unit::NONE;
+	if (strncmp("MICROSECOND", unit_str, UNIT_MAX_LEN) == 0) unit = Unit::MICROSECOND;
+	else if (strncmp("MILLISECOND", unit_str, UNIT_MAX_LEN) == 0) unit = Unit::MILLISECOND;
+	else if (strncmp("SECOND", unit_str, UNIT_MAX_LEN) == 0) unit = Unit::SECOND;
+	else if (strncmp("MINUTE", unit_str, UNIT_MAX_LEN) == 0) unit = Unit::MINUTE;
+	else if (strncmp("HOUR", unit_str, UNIT_MAX_LEN) == 0) unit = Unit::HOUR;
+	else if (strncmp("DAY", unit_str, UNIT_MAX_LEN) == 0) unit = Unit::DAY;
+	// return the found value!
+	if (unit == Unit::NONE) return LoomNet::TIME_NONE;
+	return { unit, time };
+}
+
 namespace LoomNet {
 
 	uint16_t get_addr(const JsonObjectConst& topology, const char* name) {
@@ -168,6 +188,7 @@ namespace LoomNet {
 	}
 
 	NetworkInfo read_network_topology(const JsonObjectConst& topology, const char* self_name) {
+		// read the "root" structure
 		// device type
 		DeviceType type = DeviceType::ERROR;
 		// address
@@ -258,6 +279,14 @@ namespace LoomNet {
 		// finally count total slots in the entire network
 		uint8_t total_slots = 0;
 		m_count_slots_children(root_obj, total_slots);
+		// read the "config" object
+		const JsonObjectConst config = topology["config"];
+		if (config.isNull()) return { ROUTER_ERROR, SLOTTER_ERROR };
+		// read the slot length
+		const TimeInterval slot_length = m_json_to_time(config["slot_length"]);
+		// and the cycles per batch
+		const uint8_t cycles_per_batch = config["cycles_per_batch"] | 0;
+		if (!cycles_per_batch) return { ROUTER_ERROR, SLOTTER_ERROR };
 		// return it all! jesus christ
 		return {
 			{
@@ -270,7 +299,8 @@ namespace LoomNet {
 			{
 				self_slot,
 				total_slots,
-				LoomNet::CYCLES_PER_BATCH,
+				cycles_per_batch,
+				slot_length,
 				send_slots,
 				child_slot,
 				child_slot_count

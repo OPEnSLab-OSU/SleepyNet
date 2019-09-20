@@ -37,6 +37,19 @@ namespace LoomNet {
 			ROUTE_FAIL,
 		};
 
+		struct PacketWithDst {
+			PacketWithDst(const uint16_t start_dst, const Packet& start_packet)
+				: dst(start_dst)
+				, packet(start_packet) {}
+
+			PacketWithDst(const PacketWithDst& rhs)
+				: dst(rhs.dst)
+				, packet(rhs.packet) {}
+
+			uint16_t dst;
+			Packet packet;
+		};
+
 		Network(const NetworkInfo& config, const RadioImpl& radio)
 			: m_radio(radio)
 			, m_mac(	config.route_info.get_self_addr(), 
@@ -157,6 +170,7 @@ namespace LoomNet {
 							return m_halt_error(Error::RECV_BUF_FULL);
 						// flip the recv ready bit
 						m_status |= Status::NET_RECV_RDY;
+
 					}
 					// else the packet needs to be routed
 					else {
@@ -232,6 +246,7 @@ namespace LoomNet {
 		uint8_t get_status() const { return m_status; }
 		const Router& get_router() const { return m_router; }
 		const MAC& get_mac() const { return m_mac; }
+		const RadioImpl& get_radio() const { return m_radio; }
 
 	private:
 		void m_send_add(const uint16_t dst, const Packet& packet) {
@@ -240,6 +255,8 @@ namespace LoomNet {
 		}
 
 		uint8_t m_halt_error(Error error) {
+			Serial.print("Error: ");
+			Serial.println(static_cast<uint8_t>(error));
 			m_last_error = error;
 			// teardown here?
 			return m_status = Status::NET_CLOSED;
@@ -252,19 +269,6 @@ namespace LoomNet {
 			else 
 				m_status &= ~Status::NET_SLEEP_RDY;
 		}
-
-		struct PacketWithDst {
-			PacketWithDst(const uint16_t start_dst, const Packet& start_packet)
-				: dst(start_dst)
-				, packet(start_packet) {}
-
-			PacketWithDst(const PacketWithDst& rhs)
-				: dst(rhs.dst)
-				, packet(rhs.packet) {}
-
-			uint16_t dst;
-			Packet packet;
-		};
 
 		RadioImpl m_radio;
 		MAC m_mac;

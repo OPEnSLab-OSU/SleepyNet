@@ -15,7 +15,7 @@ namespace LoomNet {
 	constexpr auto STRING_MAX = 32;
 	constexpr auto PROTOCOL_VER = 0;
 	constexpr auto MAX_DEVICES = 255;
-	constexpr uint8_t PACKET_MAX = 64;
+	constexpr uint8_t PACKET_MAX = 32;
 	constexpr uint8_t REFRESH_CYCLE_SLOTS = 2;
 
 	enum PacketCtrl : uint8_t {
@@ -224,12 +224,12 @@ namespace LoomNet {
 	// debug stuff for simulation
 	// TODO: replace this stuff with real numbers
 	// TODO: CYCLES_PER_BATCH cannot be less than two
-	constexpr uint8_t CYCLES_PER_BATCH = 2;
+	// constexpr uint8_t CYCLES_PER_BATCH = 2;
 	constexpr uint8_t CYCLE_GAP = 1;
-	const TimeInterval SLOT_LENGTH(TimeInterval::Unit::SECOND, 10);
+	// const TimeInterval SLOT_LENGTH(TimeInterval::Unit::SECOND, 5);
 	const TimeInterval RECV_TIMEOUT(TimeInterval::Unit::SECOND, 3);
-	// const TimeInterval SLOT_LENGTH(TimeInterval::Unit::MILLISECOND, 2000);
-	// const TimeInterval RECV_TIMEOUT(TimeInterval::Unit::MILLISECOND, 200);
+	// const TimeInterval SLOT_LENGTH(TimeInterval::Unit::MILLISECOND, 1000);
+	// const TimeInterval RECV_TIMEOUT(TimeInterval::Unit::MILLISECOND, 600);
 	constexpr uint8_t BATCH_GAP = 1;
 	constexpr uint8_t FAIL_MAX = 6;
 }

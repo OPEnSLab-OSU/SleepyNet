@@ -13,6 +13,8 @@ static uint16_t m_recurse_traverse(const JsonObjectConst& parent, const char* se
 	uint16_t cur_router_count = 1;
 	const JsonArrayConst children = parent["children"];
 
+	const char* name = parent["name"];
+
 	for (JsonObjectConst device : children) {
 		if (device.isNull()) return LoomNet::ADDR_ERROR;
 		// get the device type
@@ -215,7 +217,7 @@ namespace LoomNet {
 			type = get_type(address);
 			parent = get_parent(address, type);
 			// error if not found
-			if (type == DeviceType::ERROR || parent == ADDR_ERROR) return { ROUTER_ERROR, SLOTTER_ERROR };
+			if (type == DeviceType::ERROR || parent == ADDR_ERROR) return NETWORK_ERROR;
 		}
 		// next, we need to find our devices children in the JSON
 		// find the array of children we would like to search
@@ -226,7 +228,7 @@ namespace LoomNet {
 		uint8_t node_count = 0;
 		// iterate through the children array, counting nodes and routers
 		for (JsonObjectConst obj : ray) {
-			if (obj.isNull()) return { ROUTER_ERROR, SLOTTER_ERROR };
+			if (obj.isNull()) return NETWORK_ERROR;
 			// get the device type
 			const uint8_t type = obj["type"] | static_cast<uint8_t>(255);
 			// if it's a router, increment routers
@@ -234,7 +236,7 @@ namespace LoomNet {
 			// else if it's a node, incremement nodes
 			else if (type == 0) node_count++;
 			// else uh oh
-			else return { ROUTER_ERROR, SLOTTER_ERROR };
+			else return NETWORK_ERROR;
 		}
 		// next, we need to determine the device's layer and slot information
 		// collect the slot for the devices self and first child
@@ -281,12 +283,24 @@ namespace LoomNet {
 		m_count_slots_children(root_obj, total_slots);
 		// read the "config" object
 		const JsonObjectConst config = topology["config"];
-		if (config.isNull()) return { ROUTER_ERROR, SLOTTER_ERROR };
+		if (config.isNull()) return NETWORK_ERROR;
 		// read the slot length
 		const TimeInterval slot_length = m_json_to_time(config["slot_length"]);
-		// and the cycles per batch
+		// the cycles per batch
 		const uint8_t cycles_per_batch = config["cycles_per_batch"] | 0;
-		if (!cycles_per_batch) return { ROUTER_ERROR, SLOTTER_ERROR };
+		// the slots per gap per every cycle
+		const uint8_t cycle_gap = config["cycle_gap"] | 0;
+		// the slots per gap per every batch
+		const uint8_t batch_gap = config["batch_gap"] | 0;
+		// and the clock drift per refresh cycle
+		const TimeInterval max_drift = m_json_to_time(config["max_drift"]);
+		const TimeInterval min_drift = m_json_to_time(config["min_drift"]);
+		// check them all for errors
+		if (slot_length.is_none()
+			|| cycles_per_batch < 2
+			|| !cycle_gap
+			|| min_drift.is_none()
+			|| max_drift.is_none()) return NETWORK_ERROR;
 		// return it all! jesus christ
 		return {
 			{
@@ -300,10 +314,16 @@ namespace LoomNet {
 				self_slot,
 				total_slots,
 				cycles_per_batch,
-				slot_length,
+				cycle_gap,
+				batch_gap,
 				send_slots,
 				child_slot,
 				child_slot_count
+			},
+			{
+				max_drift,
+				min_drift,
+				slot_length
 			}
 		};
 	}

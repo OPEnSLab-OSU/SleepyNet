@@ -54,7 +54,8 @@ namespace LoomNet {
 			: m_radio(radio)
 			, m_mac(	config.route_info.get_self_addr(), 
 						config.route_info.get_device_type(),
-						config.slot_info, 
+						config.slot_info,
+						config.drift_info,
 						m_radio)
 			, m_router(config.route_info)
 			, m_rolling_id(0)
@@ -69,7 +70,8 @@ namespace LoomNet {
 			: m_radio(rhs.m_radio)
 			, m_mac(	rhs.m_router.get_self_addr(), 
 						rhs.m_router.get_device_type(), 
-						rhs.m_mac.get_slotter(), 
+						rhs.m_mac.get_slotter(),
+						rhs.m_mac.get_drift(),
 						m_radio)
 			, m_router(rhs.m_router)
 			, m_rolling_id(rhs.m_rolling_id)
@@ -255,8 +257,8 @@ namespace LoomNet {
 		}
 
 		uint8_t m_halt_error(Error error) {
-			Serial.print("Error: ");
-			Serial.println(static_cast<uint8_t>(error));
+			// Serial.print("Error: ");
+			// Serial.println(static_cast<uint8_t>(error));
 			m_last_error = error;
 			// teardown here?
 			return m_status = Status::NET_CLOSED;

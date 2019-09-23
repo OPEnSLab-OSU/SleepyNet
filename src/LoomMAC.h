@@ -5,6 +5,7 @@
 #include "LoomNetworkUtility.h"
 #include "LoomSlotter.h"
 #include "LoomRadio.h"
+#include "LoomNetworkInfo.h"
 
 /** 
  * Loom Medium Access Control 
@@ -43,7 +44,8 @@ namespace LoomNet {
 
 		MAC(	const uint16_t self_addr, 
 				const DeviceType self_type, 
-				const Slotter& slot, 
+				const Slotter& slot,
+				const Drift& timing,
 				Radio& radio)
 			: m_slot(slot)
 			, m_state(State::MAC_REFRESH_WAIT)
@@ -58,7 +60,8 @@ namespace LoomNet {
 			, m_fail_count(0)
 			, m_radio(radio)
 			, m_self_addr(self_addr)
-			, m_self_type(self_type) {}
+			, m_self_type(self_type)
+			, m_timings(timing) {}
 
 		bool operator==(const MAC& rhs) const {
 			return (rhs.m_slot == m_slot)
@@ -122,14 +125,15 @@ namespace LoomNet {
 		// we do one slot for debugging purposes
 		TimeInterval sleep_next_wake_time() const {
 			const Slotter::State state = m_slot.get_state();
+			const TimeInterval rel_sleep = m_timings.slot_length * m_slot.get_slot_wait();
 			if (state == Slotter::State::SLOT_WAIT_REFRESH)
 				return m_next_refresh;
 			// else if it's the first cycle, we have to account for synchronizing the data
 			// cycle
 			else if ((state == Slotter::State::SLOT_RECV_W_SYNC || state == Slotter::State::SLOT_SEND_W_SYNC) && !m_next_data.is_none())
-				return m_next_data + m_slot.get_slot_wait_time();
+				return m_next_data + rel_sleep;
 			else
-				return m_time_wake_start + m_slot.get_slot_wait_time();
+				return m_time_wake_start + rel_sleep + m_timings.slot_length;
 		}
 
 		uint16_t get_cur_send_address() const { return m_cur_send_addr; }
@@ -216,8 +220,8 @@ namespace LoomNet {
 				if (recv.get_control() != PacketCtrl::NONE 
 					&& recv.check_packet(m_cur_send_addr) 
 					&& recv.get_src() != m_self_addr) {
-					Serial.print("Took: ");
-					Serial.println(m_check_count);
+					// Serial.print("Took: ");
+					// Serial.println(m_check_count);
 					m_check_count = 0;
 					// a packet! wow.
 					// check to see if it's the right kind of packet
@@ -259,7 +263,7 @@ namespace LoomNet {
 					}
 					// check the timeout
 					const TimeInterval delta = m_radio.get_time() - m_time_wake_start;
-					if (delta >= RECV_TIMEOUT) {
+					if (delta >= m_timings.min_drift) {
 						m_check_count = 0;
 						// I suppose you have nothing to say for yourself
 						// very well
@@ -300,7 +304,7 @@ namespace LoomNet {
 			// reset fail count since fail count is per batch
 			m_fail_count = 0;
 			// calculate the number of slots remaining until the next refresh using preconfigured values
-			const uint32_t slots_until_refresh = m_slot.get_refresh_slots();
+			const uint32_t slots_until_refresh = m_slot.get_slots_per_refresh();
 			// if we're a router or end device, just check and see if anyone has transmitted a signal
 			// and if we haven't already (this should only happen on first power on) set the idle timestamp
 			if (m_time_wake_start.is_none()) 
@@ -331,19 +335,19 @@ namespace LoomNet {
 				// if it's been over the reasonable number of slots, fail
 				else {
 					const TimeInterval delta = m_radio.get_time() - m_time_wake_start;
-					const TimeInterval refresh_cycle_length = m_slot.get_slot_length() * REFRESH_CYCLE_SLOTS;
+					const TimeInterval refresh_cycle_length = m_timings.slot_length * REFRESH_CYCLE_SLOTS;
 					if (m_next_refresh.is_none()) {
-						if (delta >= m_slot.get_slot_length() * (slots_until_refresh + REFRESH_CYCLE_SLOTS)) {
+						if (delta >= m_timings.slot_length * (slots_until_refresh + REFRESH_CYCLE_SLOTS)) {
 							// first refresh didn't work, so hard fail
 							m_halt_error(Error::REFRESH_TIMEOUT);
 						}
 					}
-					else if (delta >= refresh_cycle_length - (m_slot.get_slot_length() - RECV_TIMEOUT)) {
+					else if (delta >= refresh_cycle_length - m_timings.max_drift) {
 						// no refresh, but I guess we can just guess the values we got are still correct
 						// create values based on preconfigured settings and previous timings
 						m_next_data = m_time_wake_start + refresh_cycle_length;
 						// subtract what we've already waited from the total slots until refersh
-						m_next_refresh = m_time_wake_start + m_slot.get_slot_length() * slots_until_refresh;
+						m_next_refresh = m_time_wake_start + m_timings.slot_length * slots_until_refresh;
 						m_state = State::MAC_SLEEP_RDY;
 						m_radio.sleep();
 					}
@@ -353,9 +357,9 @@ namespace LoomNet {
 			else {
 				// write to the network
 				// TODO: exact timings
-				// subtract one here because the coordinator transmits in a different loop than the devices recieve
-				TimeInterval next_data_relative(m_slot.get_slot_length() * REFRESH_CYCLE_SLOTS);
-				TimeInterval next_refresh_relative(m_slot.get_slot_length() * slots_until_refresh);
+				// subtract the drift we correct with when waking up to transmit
+				TimeInterval next_data_relative(m_timings.slot_length * REFRESH_CYCLE_SLOTS - m_timings.max_drift);
+				TimeInterval next_refresh_relative(m_timings.slot_length * slots_until_refresh - m_timings.max_drift);
 				// downcast both time intervals to the right sizes
 				next_data_relative.downcast(UCHAR_MAX);
 				next_refresh_relative.downcast(USHRT_MAX);
@@ -374,7 +378,7 @@ namespace LoomNet {
 				m_radio.send(frag);
 				// next state!
 				m_next_data = next_data_relative + time_now;
-				m_next_refresh = next_refresh_relative + time_now;
+				m_next_refresh = next_refresh_relative + m_timings.max_drift + time_now;
 				m_state = State::MAC_SLEEP_RDY;
 				m_radio.sleep();
 				// increment the slotter state, if we haven't already via sleep_wake_ack
@@ -384,6 +388,7 @@ namespace LoomNet {
 		}
 
 		const Slotter& get_slotter() const { return m_slot; }
+		const Drift& get_drift() const { return m_timings; }
 
 	private:
 
@@ -419,6 +424,7 @@ namespace LoomNet {
 		Radio& m_radio;
 		const uint16_t m_self_addr;
 		const DeviceType m_self_type;
+		const Drift m_timings;
 		// TODO: remove
 		int m_check_count = 0;
 	};

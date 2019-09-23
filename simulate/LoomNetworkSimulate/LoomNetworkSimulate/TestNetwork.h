@@ -28,6 +28,9 @@ protected:
 	}
 };
 
+constexpr static LoomNet::TimeInterval::Unit slot_unit = LoomNet::TimeInterval::Unit::SECOND;
+constexpr static uint32_t slot_length = 10;
+
 class TestRadio : public LoomNet::Radio {
 public:
 	TestRadio(std::array<uint8_t, LoomNet::PACKET_MAX> & airwaves, const size_t& cur_slot, const size_t& cur_loop, std::default_random_engine& rand, const int& drop_rate)
@@ -38,7 +41,7 @@ public:
 		, m_drop_rate(drop_rate)
 		, m_state(State::DISABLED) {}
 
-	LoomNet::TimeInterval get_time() const override { return { LoomNet::SLOT_LENGTH.get_unit(), m_cur_slot * LoomNet::SLOT_LENGTH.get_time() + m_cur_loop }; }
+	LoomNet::TimeInterval get_time() const override { return { slot_unit, m_cur_slot * slot_length + m_cur_loop }; }
 	LoomNet::Radio::State get_state() const override { return m_state; }
 	void enable() override {
 		if (m_state != State::DISABLED) 
@@ -72,7 +75,10 @@ public:
 		if (m_drop_rate == 0
 			|| std::uniform_int_distribution<int>(0, 99)(m_rand) > m_drop_rate)
 			for (auto i = 0; i < send.get_packet_length(); i++) m_airwaves[i] = send.get_raw()[i];
-		else m_airwaves.fill(0);
+		else {
+			// std::cout << "Droppped packet!" << std::endl;
+			m_airwaves.fill(0);
+		}
  	}
 
 private:
@@ -160,7 +166,7 @@ public:
 		unsigned int woke_count = 0;
 		for (uint8_t o = 0; o < devices.size(); o++) {
 			if (devices[o].get_status() & NetStatus::NET_SLEEP_RDY) {
-				if (cur_slot * LoomNet::SLOT_LENGTH.get_time() >= next_wake_times[o]) {
+				if (cur_slot * slot_length >= next_wake_times[o]) {
 					devices[o].net_sleep_wake_ack();
 					woke_count++;
 					m_print(Verbosity::VERBOSE) << "0x" << std::hex << std::setfill('0') << std::setw(4) << devices[o].get_router().get_self_addr() << ", ";
@@ -168,13 +174,13 @@ public:
 			}
 		}
 		m_print(Verbosity::VERBOSE) << std::endl;
-		if (woke_count >= 3 && woke_count <= devices.size() - 2) {
+		if (woke_count >= 3 && woke_count <= devices.size() - 2 && woke_count != 1) {
 			m_print(Verbosity::ERROR) << "Devcies out of sync!" << std::endl;
 			last_error = Error::OUT_OF_SYNC;
 		}
 		// iterate through each element until all of them are asleep, then move to the next slot
 		bool all_sleep;
-		for (; cur_loop < LoomNet::SLOT_LENGTH.get_time(); cur_loop++) {
+		for (; cur_loop < slot_length; cur_loop++) {
 			all_sleep = true;
 			m_print(Verbosity::VERBOSE) << "	Iteration " << cur_loop << ":" << std::endl;
 			for (uint8_t i = 0; i < devices.size(); i++) {

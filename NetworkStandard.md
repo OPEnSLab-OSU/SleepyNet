@@ -286,6 +286,14 @@ Additionally, a radio shall have an implementation of a method to create unique 
                      "unit": "SECOND",
                      "time": 5
               },
+              "max_drift": {
+                     "unit": "MILLISECOND",
+                     "time": 200,
+              },
+              "min_drift" :{
+                     "unit": "MILLISECOND",
+                     "time": 2,
+              }
        },
        "root" : {
               "name": "BillyTheCoord",

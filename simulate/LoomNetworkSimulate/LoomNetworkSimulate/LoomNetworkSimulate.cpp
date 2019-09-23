@@ -149,8 +149,8 @@ int main()
 	std::cout << "end testing circular buffer" << std::endl;
 	std::cout << "begin testing JSON network parsing" << std::endl;
 
-	constexpr char JSONStr[] = "{\"root\":{\"name\":\"BillyTheCoord\",\"sensor\":false,\"children\":[{\"name\":\"End Device 1\",\"type\":0,\"addr\":\"0x001\"},{\"name\":\"Router 1\",\"sensor\":false,\"type\":1,\"addr\":\"0x1000\",\"children\":[{\"name\":\"Router 1 End Device 1\",\"type\":0,\"addr\":\"0x1001\"},{\"name\":\"Router 1 End Device 2\",\"type\":0,\"addr\":\"0x1002\"},{\"name\":\"Router 1 Router 1\",\"sensor\":false,\"type\":1,\"addr\":\"0x1100\",\"children\":[{\"name\":\"Router 1 Router 1 End Device 1\",\"type\":0,\"addr\":\"0x1101\"}]},{\"name\":\"Router 1 Router 2\",\"sensor\":true,\"type\":1,\"addr\":\"0x1200\",\"children\":[{\"name\":\"Router 1 Router 2 End Device 1\",\"type\":0,\"addr\":\"0x1001\"},{\"name\":\"Router 1 Router 2 End Device 2\",\"type\":0,\"addr\":\"0x1202\"}]},{\"name\":\"Router 1 End Device 3\",\"type\":0,\"addr\":\"0x1003\"}]},{\"name\":\"Router 2\",\"sensor\":true,\"type\":1,\"addr\":\"0x2000\",\"children\":[{\"name\":\"Router 2 End Device 1\",\"type\":0,\"addr\":\"0x2001\"}]},{\"name\":\"Router 3\",\"sensor\":false,\"type\":1,\"addr\":\"0x3000\",\"children\":[{\"name\":\"Router 3 Router 1\",\"sensor\":false,\"type\":1,\"addr\":\"0x3100\",\"children\":[{\"name\":\"Router 3 Router 1 End Device 1\",\"type\":0,\"addr\":\"0x3101\"}]}]}]}}";
-	constexpr auto size = 2048;
+	constexpr char JSONStr[] = "{\"config\":{\"cycles_per_batch\":2,\"cycle_gap\":1,\"batch_gap\":1,\"slot_length\":{\"unit\":\"SECOND\",\"time\":10},\"max_drift\":{\"unit\":\"SECOND\",\"time\":10},\"min_drift\":{\"unit\":\"SECOND\",\"time\":3}},\"root\":{\"name\":\"BillyTheCoord\",\"sensor\":false,\"children\":[{\"name\":\"End Device 1\",\"type\":0,\"addr\":\"0x001\"},{\"name\":\"Router 1\",\"sensor\":false,\"type\":1,\"addr\":\"0x1000\",\"children\":[{\"name\":\"Router 1 End Device 1\",\"type\":0,\"addr\":\"0x1001\"},{\"name\":\"Router 1 End Device 2\",\"type\":0,\"addr\":\"0x1002\"},{\"name\":\"Router 1 Router 1\",\"sensor\":false,\"type\":1,\"addr\":\"0x1100\",\"children\":[{\"name\":\"Router 1 Router 1 End Device 1\",\"type\":0,\"addr\":\"0x1101\"}]},{\"name\":\"Router 1 Router 2\",\"sensor\":true,\"type\":1,\"addr\":\"0x1200\",\"children\":[{\"name\":\"Router 1 Router 2 End Device 1\",\"type\":0,\"addr\":\"0x1001\"},{\"name\":\"Router 1 Router 2 End Device 2\",\"type\":0,\"addr\":\"0x1202\"}]},{\"name\":\"Router 1 End Device 3\",\"type\":0,\"addr\":\"0x1003\"}]},{\"name\":\"Router 2\",\"sensor\":true,\"type\":1,\"addr\":\"0x2000\",\"children\":[{\"name\":\"Router 2 End Device 1\",\"type\":0,\"addr\":\"0x2001\"}]},{\"name\":\"Router 3\",\"sensor\":false,\"type\":1,\"addr\":\"0x3000\",\"children\":[{\"name\":\"Router 3 Router 1\",\"sensor\":false,\"type\":1,\"addr\":\"0x3100\",\"children\":[{\"name\":\"Router 3 Router 1 End Device 1\",\"type\":0,\"addr\":\"0x3101\"}]}]}]}}";
+	constexpr auto size = 4096;
 
 	StaticJsonDocument<size> json;
 	deserializeJson(json, JSONStr);
@@ -158,22 +158,22 @@ int main()
 
 	{
 		using namespace LoomNet;
-		test_address(read_network_topology(obj, "Router 3 Router 1 End Device 1"),	Router(DeviceType::END_DEVICE, 0x3101, 0x3100, 0, 0),			Slotter(3, 24, 0), "Router 3 Router 1 End Device 1");
-		test_address(read_network_topology(obj, "Router 3 Router 1"),				Router(DeviceType::SECOND_ROUTER, 0x3100, 0x3000, 0, 1),		Slotter(12, 24, 0, 1, 3, 1), "Router 3 Router 1");
-		test_address(read_network_topology(obj, "Router 3"),						Router(DeviceType::FIRST_ROUTER, 0x3000, ADDR_COORD, 1, 0),		Slotter(22, 24, 0, 1, 12, 1), "Router 3");
-		test_address(read_network_topology(obj, "Router 2 End Device 1"),			Router(DeviceType::END_DEVICE, 0x2001, 0x2000, 0, 0),			Slotter(11, 24, 0), "Router 2 End Device 1");
-		test_address(read_network_topology(obj, "Router 2"),						Router(DeviceType::FIRST_ROUTER, 0x2000, ADDR_COORD, 0, 1),		Slotter(20, 24, 0, 2, 11, 1), "Router 2");
-		test_address(read_network_topology(obj, "Router 1 End Device 3"),			Router(DeviceType::END_DEVICE, 0x1003, 0x1000, 0, 0),			Slotter(10, 24, 0), "Router 1 End Device 3");
-		test_address(read_network_topology(obj, "Router 1 Router 2"),				Router(DeviceType::SECOND_ROUTER, 0x1200, 0x1000, 0, 2),		Slotter(5, 24, 0, 3, 1, 2), "Router 1 Router 2");
-		test_address(read_network_topology(obj, "Router 1 Router 2 End Device 1"),	Router(DeviceType::END_DEVICE, 0x1201, 0x1200, 0, 0),			Slotter(1, 24, 0), "Router 1 Router 2 End Device 1");
-		test_address(read_network_topology(obj, "Router 1 Router 2 End Device 2"),	Router(DeviceType::END_DEVICE, 0x1202, 0x1200, 0, 0),			Slotter(2, 24, 0), "Router 1 Router 2 End Device 2");
-		test_address(read_network_topology(obj, "Router 1 Router 1"),				Router(DeviceType::SECOND_ROUTER, 0x1100, 0x1000, 0, 1),		Slotter(4, 24, 0, 1, 0, 1), "Router 1 Router 1");
-		test_address(read_network_topology(obj, "Router 1 Router 1 End Device 1"),	Router(DeviceType::END_DEVICE, 0x1101, 0x1100, 0, 0),			Slotter(0, 24, 0), "Router 1 Router 1 End Device 1");
-		test_address(read_network_topology(obj, "Router 1 End Device 2"),			Router(DeviceType::END_DEVICE, 0x1002, 0x1000, 0, 0),			Slotter(9, 24, 0), "Router 1 End Device 2");
-		test_address(read_network_topology(obj, "Router 1 End Device 1"),			Router(DeviceType::END_DEVICE, 0x1001, 0x1000, 0, 0),			Slotter(8, 24, 0), "Router 1 End Device 1");
-		test_address(read_network_topology(obj, "Router 1"),						Router(DeviceType::FIRST_ROUTER, 0x1000, ADDR_COORD, 2, 3),		Slotter(13, 24, 0, 7, 4, 7), "Router 1");
-		test_address(read_network_topology(obj, "End Device 1"),					Router(DeviceType::END_DEVICE, 0x0001, ADDR_COORD, 0, 0),		Slotter(23, 24, 0), "End Device 1");
-		test_address(read_network_topology(obj, "BillyTheCoord"),					Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 3, 1),	Slotter(SLOT_NONE, 24, 0, 0, 13, 11), "Coordinator");
+		test_address(read_network_topology(obj, "Router 3 Router 1 End Device 1"),	Router(DeviceType::END_DEVICE, 0x3101, 0x3100, 0, 0),			Slotter(3, 24, 2, 1, 1), "Router 3 Router 1 End Device 1");
+		test_address(read_network_topology(obj, "Router 3 Router 1"),				Router(DeviceType::SECOND_ROUTER, 0x3100, 0x3000, 0, 1),		Slotter(12, 24, 2, 1, 1, 1, 3, 1), "Router 3 Router 1");
+		test_address(read_network_topology(obj, "Router 3"),						Router(DeviceType::FIRST_ROUTER, 0x3000, ADDR_COORD, 1, 0),		Slotter(22, 24, 2, 1, 1, 1, 12, 1), "Router 3");
+		test_address(read_network_topology(obj, "Router 2 End Device 1"),			Router(DeviceType::END_DEVICE, 0x2001, 0x2000, 0, 0),			Slotter(11, 24, 2, 1, 1), "Router 2 End Device 1");
+		test_address(read_network_topology(obj, "Router 2"),						Router(DeviceType::FIRST_ROUTER, 0x2000, ADDR_COORD, 0, 1),		Slotter(20, 24, 2, 1, 1, 2, 11, 1), "Router 2");
+		test_address(read_network_topology(obj, "Router 1 End Device 3"),			Router(DeviceType::END_DEVICE, 0x1003, 0x1000, 0, 0),			Slotter(10, 24, 2, 1, 1), "Router 1 End Device 3");
+		test_address(read_network_topology(obj, "Router 1 Router 2"),				Router(DeviceType::SECOND_ROUTER, 0x1200, 0x1000, 0, 2),		Slotter(5, 24, 2, 1, 1, 3, 1, 2), "Router 1 Router 2");
+		test_address(read_network_topology(obj, "Router 1 Router 2 End Device 1"),	Router(DeviceType::END_DEVICE, 0x1201, 0x1200, 0, 0),			Slotter(1, 24, 2, 1, 1), "Router 1 Router 2 End Device 1");
+		test_address(read_network_topology(obj, "Router 1 Router 2 End Device 2"),	Router(DeviceType::END_DEVICE, 0x1202, 0x1200, 0, 0),			Slotter(2, 24, 2, 1, 1), "Router 1 Router 2 End Device 2");
+		test_address(read_network_topology(obj, "Router 1 Router 1"),				Router(DeviceType::SECOND_ROUTER, 0x1100, 0x1000, 0, 1),		Slotter(4, 24, 2, 1, 1, 1, 0, 1), "Router 1 Router 1");
+		test_address(read_network_topology(obj, "Router 1 Router 1 End Device 1"),	Router(DeviceType::END_DEVICE, 0x1101, 0x1100, 0, 0),			Slotter(0, 24, 2, 1, 1), "Router 1 Router 1 End Device 1");
+		test_address(read_network_topology(obj, "Router 1 End Device 2"),			Router(DeviceType::END_DEVICE, 0x1002, 0x1000, 0, 0),			Slotter(9, 24, 2, 1, 1), "Router 1 End Device 2");
+		test_address(read_network_topology(obj, "Router 1 End Device 1"),			Router(DeviceType::END_DEVICE, 0x1001, 0x1000, 0, 0),			Slotter(8, 24, 2, 1, 1), "Router 1 End Device 1");
+		test_address(read_network_topology(obj, "Router 1"),						Router(DeviceType::FIRST_ROUTER, 0x1000, ADDR_COORD, 2, 3),		Slotter(13, 24, 2, 1, 1, 7, 4, 7), "Router 1");
+		test_address(read_network_topology(obj, "End Device 1"),					Router(DeviceType::END_DEVICE, 0x0001, ADDR_COORD, 0, 0),		Slotter(23, 24, 2, 1, 1), "End Device 1");
+		test_address(read_network_topology(obj, "BillyTheCoord"),					Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 3, 1),	Slotter(SLOT_NONE, 24, 2, 1, 1, 0, 13, 11), "Coordinator");
 
 		test_route(Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 10, 10), 0xA201, 0xA000, "Coordinator -> 0xA201");
 		test_route(Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 10, 10), 0x0005, 0x0005, "Coordinator -> 0x0005");
@@ -201,7 +201,7 @@ int main()
 	{
 		using namespace LoomNet;
 
-		// simulation five: simple net!
+		/*// simulation five: simple net!
 		std::cout << "Begin simple network test!" << std::endl;
 		{
 			StaticJsonDocument<size> json;
@@ -211,7 +211,7 @@ int main()
 
 			if (!test_network_operation(network, 0)) return false;
 		}
-		std::cout << "Simple network passed!" << std::endl;
+		std::cout << "Simple network passed!" << std::endl;*/
 
 		std::cout << "begin idle test" << std::endl;
 		{
@@ -243,7 +243,7 @@ int main()
 			// simuation three: no coordinator, devices eventually just error out
 			for (; network.cur_slot < 1000; network.cur_slot++) {
 				bool all_closed = true;
-				for (network.cur_loop = 0; network.cur_loop < LoomNet::SLOT_LENGTH.get_time(); network.cur_loop++) {
+				for (network.cur_loop = 0; network.cur_loop < 10; network.cur_loop++) {
 					for (auto& d : network.devices) {
 						if (d.get_router().get_device_type() != DeviceType::COORDINATOR) {
 							const auto status = d.net_update();
@@ -268,7 +268,7 @@ int main()
 		// simulation four: same as simulation two, but packets drop randomly inside the network
 		std::cout << "Begin lossy single send test." << std::endl;
 		{
-			TestNetwork network(obj);
+			TestNetwork network(obj, TestNetwork::Verbosity::ERROR);
 
 			if (!test_network_operation(network, 5)) return false;
 		}

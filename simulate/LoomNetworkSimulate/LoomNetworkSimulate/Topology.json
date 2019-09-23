@@ -1,6 +1,20 @@
 {
   "config": {
-    "cycles_per_refresh":  20
+    "cycles_per_batch": 2,
+    "cycle_gap": 1,
+    "batch_gap": 1,
+    "slot_length": {
+      "unit": "SECOND",
+      "time": 10
+    },
+    "max_drift": {
+      "unit": "SECOND",
+      "time": 10
+    },
+    "min_drift": {
+      "unit": "SECOND",
+      "time": 3
+    }
   },
   "root": {
     "name": "BillyTheCoord",
@@ -87,13 +101,13 @@
           {
             "name": "Router 3 Router 1",
             "sensor": false,
-            "type":  1,
+            "type": 1,
             "addr": "0x3100",
             "children": [
               {
                 "name": "Router 3 Router 1 End Device 1",
                 "type": 0,
-                "addr":  "0x3101"
+                "addr": "0x3101"
               }
             ]
           }

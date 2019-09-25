@@ -144,7 +144,8 @@ namespace LoomNet {
 			return 0;
 		}
 
-		uint8_t get_slots_per_refresh() const {
+		uint16_t get_slots_per_refresh() const {
+			if (m_state == State::SLOT_ERROR) return SLOT_ERROR;
 			// return the number of slots per refresh
 			return (get_total_slots() + m_cycle_gap) * m_cycles_per_refresh - m_cycle_gap + m_batch_gap + REFRESH_CYCLE_SLOTS;
 		}
@@ -156,7 +157,7 @@ namespace LoomNet {
 		}
 
 		uint8_t get_cur_data_cycle() const { return m_cur_cycle; }
-		uint8_t get_total_slots() const { return m_total_slots; }
+		uint8_t get_total_slots() const { return m_state == State::SLOT_ERROR ? SLOT_ERROR : m_total_slots; }
 
 	private:
 

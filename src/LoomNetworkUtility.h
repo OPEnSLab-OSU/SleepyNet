@@ -77,6 +77,9 @@ namespace LoomNet {
 
 		const TimeInterval operator+(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
+			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return TimeInterval{ Unit::NONE, 0 };
+			const uint64_t res = static_cast<uint64_t>(times[0].get_time()) + static_cast<uint64_t>(times[1].get_time());
+			if (res > UINT32_MAX) return TimeInterval{ Unit::NONE, 0 };
 			return { times[0].get_unit(), times[0].get_time() + times[1].get_time() };
 		}
 
@@ -87,14 +90,14 @@ namespace LoomNet {
 				: TimeInterval{ Unit::NONE, 0 };
 		}
 
-		const TimeInterval operator*(const uint32_t num) const { return { m_unit, m_time * num }; }
-		const TimeInterval operator*(const uint16_t num) const { return { m_unit, m_time * num }; }
-		const TimeInterval operator*(const uint8_t num) const { return { m_unit, m_time * num }; }
-		const TimeInterval operator*(const int num) const { return { m_unit, m_time * num }; }
+		const TimeInterval operator*(const uint32_t num) const { return m_multiply(num); }
+		const TimeInterval operator*(const uint16_t num) const { return m_multiply(num); }
+		const TimeInterval operator*(const uint8_t num) const { return m_multiply(num); }
+		const TimeInterval operator*(const int num) const { return num < 0 ? TimeInterval{ Unit::NONE, 0 } : m_multiply(num); }
 
 		bool operator==(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
-			if (times[0].get_unit() == Unit::NONE) return false;
+			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return false;
 			return times[0].get_time() == times[1].get_time();
 		}
 
@@ -102,25 +105,25 @@ namespace LoomNet {
 
 		bool operator<(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
-			if (times[0].get_unit() == Unit::NONE) return false;
+			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return false;
 			return times[0].get_time() < times[1].get_time();
 		}
 
 		bool operator>(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
-			if (times[0].get_unit() == Unit::NONE) return false;
+			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return false;
 			return times[0].get_time() > times[1].get_time();
 		}
 
 		bool operator<=(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
-			if (times[0].get_unit() == Unit::NONE) return false;
+			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return false;
 			return times[0].get_time() <= times[1].get_time();
 		}
 
 		bool operator>=(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
-			if (times[0].get_unit() == Unit::NONE) return false;
+			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return false;
 			return times[0].get_time() >= times[1].get_time();
 		}
 
@@ -153,6 +156,12 @@ namespace LoomNet {
 		}
 
 	private:
+		const TimeInterval m_multiply(const uint32_t num) const {
+			const uint64_t res = static_cast<uint64_t>(m_time) * num;
+			if (res > UINT32_MAX) return TimeInterval{ Unit::NONE, 0 };
+			return { m_unit, m_time * num };
+		}
+
 		TwoTimes m_match_time(const TimeInterval & rhs) const {
 			// error check
 			if (get_unit() == Unit::NONE || rhs.get_unit() == Unit::NONE)
@@ -164,7 +173,7 @@ namespace LoomNet {
 
 		TimeInterval m_match_unit(const TimeInterval& smaller_unit, const TimeInterval& larger_unit) const {
 			uint8_t unit_index = larger_unit.m_unit;
-			uint32_t time_index = larger_unit.m_time;
+			uint64_t time_index = larger_unit.m_time;
 			while (unit_index != smaller_unit.m_unit) {
 				switch (unit_index) {
 					// day -> hour
@@ -183,8 +192,9 @@ namespace LoomNet {
 
 				}
 				unit_index--;
+				if (time_index > UINT32_MAX) return { Unit::NONE, 0 };
 			}
-			return { unit_index, time_index };
+			return { unit_index, static_cast<uint32_t>(time_index) };
 		}
 
 		Unit m_unit;

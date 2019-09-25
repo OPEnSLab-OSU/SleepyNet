@@ -1,4 +1,7 @@
 /simulate/LoomNetworkSimulate/.vs
 /simulate/LoomNetworkSimulate/Debug
+/simulate/LoomNetworkSimulate/packages
+/simulate/LoomNetworkSimulate/TestResults
+/simulate/LoomNetworkSimulate/LoomNetworkTest/Debug
 /simulate/LoomNetworkSimulate/LoomNetworkSimulate/Debug
 .vscode

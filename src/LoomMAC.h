@@ -40,6 +40,7 @@ namespace LoomNet {
 			WRONG_PACKET_TYPE,
 			REFRESH_TIMEOUT,
 			REFRESH_PACKET_ERR,
+			INVALID_CONFIG,
 		};
 
 		MAC(	const uint16_t self_addr, 
@@ -61,7 +62,14 @@ namespace LoomNet {
 			, m_radio(radio)
 			, m_self_addr(self_addr)
 			, m_self_type(self_type)
-			, m_timings(timing) {}
+			, m_timings(timing) {
+			// error check
+			if (slot.get_state() == Slotter::State::SLOT_ERROR
+				|| self_type == DeviceType::ERROR
+				|| self_addr == ADDR_ERROR
+				|| self_addr == ADDR_NONE) 
+				m_halt_error(Error::INVALID_CONFIG);
+		}
 
 		bool operator==(const MAC& rhs) const {
 			return (rhs.m_slot == m_slot)

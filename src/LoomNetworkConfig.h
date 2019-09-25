@@ -12,9 +12,6 @@ static uint16_t m_recurse_traverse(const JsonObjectConst& parent, const char* se
 	uint16_t node_count = 1;
 	uint16_t cur_router_count = 1;
 	const JsonArrayConst children = parent["children"];
-
-	const char* name = parent["name"];
-
 	for (JsonObjectConst device : children) {
 		if (device.isNull()) return LoomNet::ADDR_ERROR;
 		// get the device type

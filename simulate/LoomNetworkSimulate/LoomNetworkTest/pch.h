@@ -8,8 +8,10 @@
 #include "gtest/gtest.h"
 #include <array>
 #include <utility>
+#include <ArduinoJson.h>
 
 #include "../../../src/LoomRouter.h"
 #include "../../../src/LoomSlotter.h"
 #include "../../../src/CircularBuffer.h"
 #include "../../../src/LoomNetworkUtility.h"
+#include "../../../src/LoomNetworkConfig.h"

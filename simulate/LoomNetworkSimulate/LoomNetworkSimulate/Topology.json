@@ -23,7 +23,7 @@
       {
         "name": "End Device 1",
         "type": 0,
-        "addr": "0x001"
+        "addr": "0x0001"
       },
       {
         "name": "Router 1",
@@ -63,7 +63,7 @@
               {
                 "name": "Router 1 Router 2 End Device 1",
                 "type": 0,
-                "addr": "0x1001"
+                "addr": "0x1201"
               },
               {
                 "name": "Router 1 Router 2 End Device 2",

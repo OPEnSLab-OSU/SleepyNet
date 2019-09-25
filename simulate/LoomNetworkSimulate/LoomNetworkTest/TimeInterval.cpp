@@ -1,7 +1,9 @@
 #include "pch.h"
+#include "../../../src/LoomNetworkUtility.h"
 
 using namespace LoomNet;
 using Unit = TimeInterval::Unit;
+
 TEST(TimeInterval, CreateAndAssign) {
 	TimeInterval test(Unit::MICROSECOND, 10);
 	EXPECT_EQ(test.get_time(), 10);

@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "../../../src/CircularBuffer.h"
 
 class Int {
 public:

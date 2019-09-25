@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "../../../src/LoomSlotter.h"
 
 using namespace LoomNet;
 using State = Slotter::State;

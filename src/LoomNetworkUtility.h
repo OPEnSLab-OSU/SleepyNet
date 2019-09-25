@@ -203,7 +203,7 @@ namespace LoomNet {
 
 	const TimeInterval TIME_NONE(TimeInterval::NONE, 0);
 
-	DeviceType get_type(const uint16_t addr) {
+	static DeviceType get_type(const uint16_t addr) {
 		if (addr == ADDR_NONE || addr == ADDR_ERROR) return DeviceType::ERROR;
 		// figure out device type and parent address from there
 		// if theres any node address, it's an end device
@@ -214,7 +214,7 @@ namespace LoomNet {
 		return DeviceType::FIRST_ROUTER;
 	}
 
-	uint16_t get_parent(const uint16_t addr, const DeviceType type) {
+	static uint16_t get_parent(const uint16_t addr, const DeviceType type) {
 		if (addr == ADDR_NONE || addr == ADDR_ERROR || type == DeviceType::ERROR)
 			return ADDR_ERROR;
 		// remove node address from end device

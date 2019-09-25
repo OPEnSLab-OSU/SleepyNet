@@ -26,7 +26,9 @@ namespace LoomNet {
 		bool operator==(const Router& rhs) const {
 			return (rhs.get_addr_parent() == get_addr_parent())
 				&& (rhs.get_device_type() == get_device_type())
-				&& (rhs.get_self_addr() == get_self_addr());
+				&& (rhs.get_self_addr() == get_self_addr())
+				&& (rhs.get_router_count() == get_router_count())
+				&& (rhs.get_node_count() == get_node_count());
 		}
 
 		// NOTE: it is presumed this function will never route to itself, and does not check if the address returned

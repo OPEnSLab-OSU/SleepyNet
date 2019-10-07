@@ -39,18 +39,27 @@
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CircularBuffer.cpp" />
-    <ClCompile Include="JSONConfig.cpp" />
-    <ClCompile Include="LoomPacket.cpp" />
-    <ClCompile Include="LoomRouter.cpp" />
+    <ClCompile Include="..\..\..\src\LoomMAC.cpp" />
+    <ClCompile Include="..\..\..\src\LoomNetworkConfig.cpp" />
+    <ClCompile Include="..\..\..\src\LoomNetworkPacket.cpp" />
+    <ClCompile Include="..\..\..\src\LoomNetworkTime.cpp" />
+    <ClCompile Include="..\..\..\src\LoomNetworkUtility.cpp" />
+    <ClCompile Include="..\..\..\src\LoomRouter.cpp" />
+    <ClCompile Include="..\..\..\src\LoomSlotter.cpp" />
+    <ClCompile Include="..\libraries\FastCRC\src\FastCRChw.cpp" />
+    <ClCompile Include="..\libraries\FastCRC\src\FastCRCsw.cpp" />
+    <ClCompile Include="CircularBufferTest.cpp" />
+    <ClCompile Include="JSONConfigTest.cpp" />
+    <ClCompile Include="LoomPacketTest.cpp" />
+    <ClCompile Include="LoomRouterTest.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="LoomSlotter.cpp" />
-    <ClCompile Include="TimeInterval.cpp" />
+    <ClCompile Include="LoomSlotterTest.cpp" />
+    <ClCompile Include="TimeTest.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\LoomNetworkSimulate\LoomNetworkSimulate.vcxproj">
@@ -67,7 +76,7 @@
   </ImportGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>

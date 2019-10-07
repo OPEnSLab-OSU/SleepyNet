@@ -3,10 +3,12 @@
 #include "LoomRouter.h"
 #include "LoomSlotter.h"
 #include "LoomNetworkUtility.h"
+#include "LoomNetworkTime.h"
 /** Simple container class for information extracted from a network configuration */
 
 namespace LoomNet {
-	struct Drift {
+	class Drift {
+	public:
 		Drift(const TimeInterval& min_drift_prop,
 			const TimeInterval& max_drift_prop,
 			const TimeInterval& slot_length_prop)

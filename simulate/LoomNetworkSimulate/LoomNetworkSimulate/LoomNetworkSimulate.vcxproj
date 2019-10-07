@@ -161,6 +161,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\LoomMAC.cpp" />
+    <ClCompile Include="..\..\..\src\LoomNetworkConfig.cpp" />
+    <ClCompile Include="..\..\..\src\LoomNetworkPacket.cpp" />
+    <ClCompile Include="..\..\..\src\LoomNetworkTime.cpp" />
+    <ClCompile Include="..\..\..\src\LoomNetworkUtility.cpp" />
+    <ClCompile Include="..\..\..\src\LoomRouter.cpp" />
+    <ClCompile Include="..\..\..\src\LoomSlotter.cpp" />
     <ClCompile Include="..\libraries\FastCRC\src\FastCRChw.cpp" />
     <ClCompile Include="..\libraries\FastCRC\src\FastCRCsw.cpp" />
     <ClCompile Include="LoomNetworkSimulate.cpp" />
@@ -172,6 +179,7 @@
     <ClInclude Include="..\..\..\src\LoomNetworkConfig.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkPacket.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkInfo.h" />
+    <ClInclude Include="..\..\..\src\LoomNetworkTime.h" />
     <ClInclude Include="..\..\..\src\LoomRadio.h" />
     <ClInclude Include="..\..\..\src\LoomRouter.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkUtility.h" />

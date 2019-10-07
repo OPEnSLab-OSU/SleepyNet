@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "../../../src/LoomNetworkUtility.h"
+#include "../../../src/LoomNetworkTime.h"
 
 using namespace LoomNet;
 using Unit = TimeInterval::Unit;

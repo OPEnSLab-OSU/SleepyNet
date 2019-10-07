@@ -15,7 +15,7 @@ set(CMAKE_CXX_FLAGS "-g -Wall")
 #----------------------------------------------------------------------------
 set(COMMON_INCLUDES ${PROJECT_SOURCE_DIR}/simulate/LoomNetworkSimulate/libraries/ArduinoJson/src ${PROJECT_SOURCE_DIR}/simulate/LoomNetworkSimulate/libraries/FastCRC/src ${PROJECT_SOURCE_DIR}/src)
 include_directories(${COMMON_INCLUDES})
-file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp)
+file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp ${PROJECT_SOURCE_DIR}/simulate/LoomNetworkSimulate/libraries/FastCRC/src/*.cpp)
 file(GLOB TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/simulate/LoomNetworkSimulate/LoomNetworkTest/*.cpp)
 # list(REMOVE_ITEM SRC_FILES ${PROJECT_SOURCE_DIR}/src/main.cpp)
 

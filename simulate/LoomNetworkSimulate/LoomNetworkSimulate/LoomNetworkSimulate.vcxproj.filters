@@ -18,10 +18,10 @@
     <ClCompile Include="LoomNetworkSimulate.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="FastCRChw.cpp">
+    <ClCompile Include="..\libraries\FastCRC\src\FastCRChw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="FastCRCsw.cpp">
+    <ClCompile Include="..\libraries\FastCRC\src\FastCRCsw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -30,9 +30,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\CircularBuffer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\LoomNetworkFragment.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\LoomMAC.h">
@@ -53,15 +50,6 @@
     <ClInclude Include="..\..\..\src\LoomNetworkInfo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="FastCRC.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="FastCRC_cpu.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="FastCRC_tables.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="pgmspace.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -69,6 +57,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TestNetwork.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\LoomNetworkPacket.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

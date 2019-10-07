@@ -204,3 +204,12 @@ TEST(TimeInterval, NoneArithmetic) {
 	EXPECT_EQ(result.get_time(), 0);
 	EXPECT_EQ(result.get_unit(), Unit::NONE);
 }
+
+TEST(TimeInterval, Downcast) {
+	TimeInterval test(TimeInterval::MICROSECOND, UINT32_MAX);
+
+	test.downcast(UINT16_MAX);
+
+	EXPECT_EQ(test.get_unit(), Unit::SECOND);
+	EXPECT_EQ(test.get_time(), 4294);
+}

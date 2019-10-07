@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <limits.h>
-#include "LoomNetworkFragment.h"
+#include "LoomNetworkPacket.h"
 #include "LoomNetworkUtility.h"
 #include "LoomSlotter.h"
 #include "LoomRadio.h"

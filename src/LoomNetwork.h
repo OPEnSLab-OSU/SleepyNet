@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CircularBuffer.h"
-#include "LoomNetworkFragment.h"
+#include "LoomNetworkPacket.h"
 #include "LoomNetworkUtility.h"
 #include "LoomMAC.h"
 #include "LoomNetworkInfo.h"

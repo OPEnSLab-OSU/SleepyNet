@@ -72,7 +72,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\Users\Noah\Documents\Arduino\libraries\ArduinoJson;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)libraries\FastCRC\src;$(SolutionDir)libraries\ArduinoJson\src;$(IncludePath)</IncludePath>
+    <SourcePath>$(SolutionDir)\libraries\FastCRC\src;$(SourcePath)</SourcePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
@@ -93,6 +94,8 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <BrowseInformation>true</BrowseInformation>
+      <AdditionalIncludeDirectories>
+      </AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -158,8 +161,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="FastCRChw.cpp" />
-    <ClCompile Include="FastCRCsw.cpp" />
+    <ClCompile Include="..\libraries\FastCRC\src\FastCRChw.cpp" />
+    <ClCompile Include="..\libraries\FastCRC\src\FastCRCsw.cpp" />
     <ClCompile Include="LoomNetworkSimulate.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -167,15 +170,12 @@
     <ClInclude Include="..\..\..\src\LoomMAC.h" />
     <ClInclude Include="..\..\..\src\LoomNetwork.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkConfig.h" />
-    <ClInclude Include="..\..\..\src\LoomNetworkFragment.h" />
+    <ClInclude Include="..\..\..\src\LoomNetworkPacket.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkInfo.h" />
     <ClInclude Include="..\..\..\src\LoomRadio.h" />
     <ClInclude Include="..\..\..\src\LoomRouter.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkUtility.h" />
     <ClInclude Include="..\..\..\src\LoomSlotter.h" />
-    <ClInclude Include="FastCRC.h" />
-    <ClInclude Include="FastCRC_cpu.h" />
-    <ClInclude Include="FastCRC_tables.h" />
     <ClInclude Include="TestNetwork.h" />
     <ClInclude Include="pgmspace.h" />
   </ItemGroup>

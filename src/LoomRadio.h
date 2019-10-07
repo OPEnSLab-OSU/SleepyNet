@@ -1,6 +1,6 @@
 #pragma once
 
-#include "LoomNetworkFragment.h"
+#include "LoomNetworkPacket.h"
 #include "LoomNetworkUtility.h"
 
 /** 

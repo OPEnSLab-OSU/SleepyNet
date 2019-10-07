@@ -97,7 +97,12 @@ namespace LoomNet {
 
 		bool operator==(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
-			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return false;
+			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) {
+				if (times[0].get_unit() == Unit::NONE && times[1].get_unit() == Unit::NONE)
+					return true;
+				else
+					return false;
+			}
 			return times[0].get_time() == times[1].get_time();
 		}
 
@@ -136,7 +141,9 @@ namespace LoomNet {
 
 			while (get_time() > type_max) {
 				switch (m_unit) {
+				// microsecond -> millisecond
 				// millisecond -> second
+				case Unit::MICROSECOND:
 				case Unit::MILLISECOND:
 					m_time /= 1000; break;
 				// second -> minute, minute -> hour

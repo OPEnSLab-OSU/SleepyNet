@@ -1,11 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#ifdef ARDUINO
 #include "FastCRC.h"
-#else
-#include "../simulate/LoomNetworkSimulate/LoomNetworkSimulate/FastCRC.h"
-#endif
 #include "LoomNetworkUtility.h"
 /**
  * Data types for Loom Network Packets
@@ -13,7 +9,7 @@
 namespace LoomNet {
 	class Packet {
 	public:
-		enum Structure {
+		enum Structure: uint8_t {
 			CONTROL = 0,
 			SRC_ADDR = 1,
 			PAYLOAD = 3
@@ -116,7 +112,7 @@ namespace LoomNet {
 
 	class DataPacket : public Packet {
 	public:
-		enum Structure {
+		enum Structure : uint8_t {
 			FRAME_LEN = 0,
 			DST_ADDR = 1,
 			ORIG_SRC_ADDR = 3,
@@ -167,7 +163,7 @@ namespace LoomNet {
 
 	class RefreshPacket : public DerivedPacket {
 	public:
-		enum Structure {
+		enum Structure : uint8_t {
 			INTERVAL_CTRL = 0,
 			DATA_OFF = 1,
 			REFRESH_OFF = 2,

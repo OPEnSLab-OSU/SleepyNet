@@ -318,8 +318,8 @@ namespace LoomNet {
 				child_slot_count
 			},
 			{
-				max_drift,
 				min_drift,
+				max_drift,
 				slot_length
 			}
 		};

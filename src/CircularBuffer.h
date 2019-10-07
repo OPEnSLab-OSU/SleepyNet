@@ -1,4 +1,5 @@
 #pragma once
+#include <stdlib.h>
 
 /**
  * Templated implementation of a fixed-size deque

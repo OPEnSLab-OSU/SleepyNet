@@ -30,7 +30,20 @@ protected:
 
 class SimpleConfigFixture : public ConfigFixtureBase {
 protected:
-	constexpr static char config[] = "\
+	const static char config[];
+
+	const Drift drift_truth{
+		TimeInterval(TimeInterval::SECOND, 3),
+		TimeInterval(TimeInterval::SECOND, 10),
+		TimeInterval(TimeInterval::SECOND, 10),
+	};
+
+	const char* get_json() const override {
+		return config;
+	}
+};
+
+const char SimpleConfigFixture::config[] = "\
 {\
 \"config\":{\
 	\"cycles_per_batch\":2,\
@@ -74,17 +87,6 @@ protected:
 		}\
 	]\
 }}";
-
-	const Drift drift_truth{
-		TimeInterval(TimeInterval::SECOND, 3),
-		TimeInterval(TimeInterval::SECOND, 10),
-		TimeInterval(TimeInterval::SECOND, 10),
-	};
-
-	const char* get_json() const override {
-		return config;
-	}
-};
 
 TEST_F(SimpleConfigFixture, Coordinator) {
 	test_config("Coordinator",
@@ -130,7 +132,20 @@ TEST_F(SimpleConfigFixture, Error) {
 
 class DeepConfigFixture : public ConfigFixtureBase {
 protected:
-	constexpr static char config[] = "{\
+	const static char config[];
+
+	const Drift drift_truth{
+		TimeInterval(TimeInterval::SECOND, 3),
+		TimeInterval(TimeInterval::SECOND, 10),
+		TimeInterval(TimeInterval::SECOND, 10),
+	};
+
+	const char* get_json() const override {
+		return config;
+	}
+};
+
+const char DeepConfigFixture::config[] = "{\
 \"config\":{\
 	\"cycles_per_batch\":2,\
 	\"cycle_gap\":1,\
@@ -176,17 +191,6 @@ protected:
 	]\
 }}";
 
-	const Drift drift_truth{
-		TimeInterval(TimeInterval::SECOND, 3),
-		TimeInterval(TimeInterval::SECOND, 10),
-		TimeInterval(TimeInterval::SECOND, 10),
-	};
-
-	const char* get_json() const override {
-		return config;
-	}
-};
-
 TEST_F(DeepConfigFixture, Coordinator) {
 	test_config("Coord",
 		Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 1, 0),
@@ -224,7 +228,20 @@ TEST_F(DeepConfigFixture, Device4) {
 
 class FullConfigFixture : public ConfigFixtureBase {
 protected:
-	constexpr static char config[] = "\
+	const static char config[];
+
+	const Drift drift_truth{
+		TimeInterval(TimeInterval::SECOND, 3),
+		TimeInterval(TimeInterval::SECOND, 10),
+		TimeInterval(TimeInterval::SECOND, 10),
+	};
+
+	const char* get_json() const override {
+		return config;
+	}
+};
+
+const char FullConfigFixture::config[] = "\
 {\
 \"config\":{\
 	\"cycles_per_batch\":2,\
@@ -342,17 +359,6 @@ protected:
 		}\
 	]\
 }}";
-
-	const Drift drift_truth{
-		TimeInterval(TimeInterval::SECOND, 3),
-		TimeInterval(TimeInterval::SECOND, 10),
-		TimeInterval(TimeInterval::SECOND, 10),
-	};
-
-	const char* get_json() const override {
-		return config;
-	}
-};
 
 TEST_F(FullConfigFixture, Router3Router1EndDevice1) {
 	test_config("Router 3 Router 1 End Device 1",

@@ -63,10 +63,12 @@ protected:
 		m_buf.add_front(Int(8, m_dcount));
 	}
 
-	constexpr static int m_answer[] = { 8, 7, 6, 5, 1, 2, 3, 4 };
+	const static int m_answer[];
 	CircularBuffer<Int, 8> m_buf;
 	int m_dcount = 0;
 };
+
+const int CircularBufferFixture::m_answer[] = { 8, 7, 6, 5, 1, 2, 3, 4 };
 
 TEST_F(CircularBufferFixture, HandlesIteration) {
 	int k = 0;

@@ -121,8 +121,3 @@ TEST(Slotter, Coordinator) {
 		i++;
 	}
 }
-
-
-TEST(Slotter, Fail) {
-	EXPECT_EQ(true, false);
-}

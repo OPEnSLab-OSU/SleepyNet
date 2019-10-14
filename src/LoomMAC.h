@@ -64,8 +64,6 @@ namespace LoomNet {
 
 		void reset();
 		void sleep_wake_ack();
-		// simulation time is in slots remaining
-		// we do one slot for debugging purposes
 		TimeInterval sleep_next_wake_time() const;
 		// make sure the address is correct!
 		bool send_fragment(const Packet& frag);

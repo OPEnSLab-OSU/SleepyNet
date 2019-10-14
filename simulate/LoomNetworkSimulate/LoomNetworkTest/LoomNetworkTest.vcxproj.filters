@@ -34,16 +34,19 @@
     <ClCompile Include="..\libraries\FastCRC\src\FastCRCsw.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="JSONConfigTest.cpp" />
+    <ClCompile Include="LoomUtilityTest.cpp" />
+    <ClCompile Include="LoomMACTest.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
     <Filter Include="Sources">
       <UniqueIdentifier>{8adffdef-ff54-4406-8434-f9803f5b952c}</UniqueIdentifier>
     </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

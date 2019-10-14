@@ -3,7 +3,10 @@
 using namespace LoomNet;
 
 DeviceType LoomNet::get_type(const uint16_t addr) {
+	// error check
 	if (addr == ADDR_NONE || addr == ADDR_ERROR) return DeviceType::ERROR;
+	// coordinator check
+	if (addr == ADDR_COORD) return DeviceType::COORDINATOR;
 	// figure out device type and parent address from there
 	// if theres any node address, it's an end device
 	if (addr & 0x00FF) return DeviceType::END_DEVICE;

@@ -12,7 +12,29 @@ public:
 	int& m_dcount;
 };
 
-TEST(CircularBuffer, HandlesInsertion) {
+class CircularBufferFixture : public ::testing::Test {
+protected:
+
+	void SetUp() override {
+		m_buf.emplace_back(1, m_dcount);
+		m_buf.emplace_back(2, m_dcount);
+		m_buf.add_back(Int(3, m_dcount));
+		m_buf.add_back(Int(4, m_dcount));
+			
+		m_buf.emplace_front(5, m_dcount);
+		m_buf.emplace_front(6, m_dcount);
+		m_buf.add_front(Int(7, m_dcount));
+		m_buf.add_front(Int(8, m_dcount));
+	}
+
+	const static int m_answer[];
+	CircularBuffer<Int, 8> m_buf;
+	int m_dcount = 0;
+};
+
+const int CircularBufferFixture::m_answer[] = { 8, 7, 6, 5, 1, 2, 3, 4 };
+
+TEST_F(CircularBufferFixture, HandlesInsertion) {
 	int dcount = 0;
 	{
 		CircularBuffer<Int, 8> buf;
@@ -46,30 +68,6 @@ TEST(CircularBuffer, HandlesInsertion) {
 
 	ASSERT_EQ(dcount, 0) << "improper cleanup, with " << dcount << " not destructed.";
 }
-
-
-class CircularBufferFixture : public ::testing::Test {
-protected:
-
-	void SetUp() override {
-		m_buf.emplace_back(1, m_dcount);
-		m_buf.emplace_back(2, m_dcount);
-		m_buf.add_back(Int(3, m_dcount));
-		m_buf.add_back(Int(4, m_dcount));
-			
-		m_buf.emplace_front(5, m_dcount);
-		m_buf.emplace_front(6, m_dcount);
-		m_buf.add_front(Int(7, m_dcount));
-		m_buf.add_front(Int(8, m_dcount));
-	}
-
-	const static int m_answer[];
-	CircularBuffer<Int, 8> m_buf;
-	int m_dcount = 0;
-};
-
-const int CircularBufferFixture::m_answer[] = { 8, 7, 6, 5, 1, 2, 3, 4 };
-
 TEST_F(CircularBufferFixture, HandlesIteration) {
 	int k = 0;
 	for (Int& temp : m_buf) {

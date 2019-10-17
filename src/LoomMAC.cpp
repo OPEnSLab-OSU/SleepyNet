@@ -343,11 +343,13 @@ void LoomNet::MAC::m_halt_error(const Error error) {
 	m_last_error = error;
 	m_state = State::MAC_CLOSED;
 	// turn off radio (safely)
-	switch (m_radio.get_state()) {
-	case Radio::State::IDLE:
-		m_radio.sleep();
-	case Radio::State::SLEEP:
-		m_radio.disable();
-	default: break;
+	while (m_radio.get_state() != Radio::State::DISABLED) {
+		switch (m_radio.get_state()) {
+		case Radio::State::IDLE:
+			m_radio.sleep();
+		case Radio::State::SLEEP:
+			m_radio.disable();
+		default: return;
+		}
 	}
 }

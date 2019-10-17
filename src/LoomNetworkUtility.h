@@ -16,7 +16,7 @@ namespace LoomNet {
 	constexpr auto PROTOCOL_VER = 0;
 	constexpr auto MAX_DEVICES = 255;
 	constexpr uint8_t PACKET_MAX = 32;
-	constexpr uint8_t REFRESH_CYCLE_SLOTS = 5;
+	constexpr uint8_t REFRESH_CYCLE_SLOTS = 4;
 
 	enum PacketCtrl : uint8_t {
 		REFRESH_INITIAL = 0b001 | (PROTOCOL_VER << 2),

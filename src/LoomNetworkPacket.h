@@ -19,6 +19,12 @@ namespace LoomNet {
 		explicit Packet(const PacketCtrl control, const uint16_t src_addr);
 		explicit Packet(const uint8_t* raw_packet, const uint8_t max_length);
 
+		bool operator==(const Packet& rhs) const {
+			for (uint8_t i = 0; i < LoomNet::PACKET_MAX; i++)
+				if (m_payload[i] != rhs.m_payload[i]) return false;
+			return true;
+		}
+
 		// get the control
 		PacketCtrl get_control() const { return static_cast<PacketCtrl>(m_payload[Structure::CONTROL]); }
 		void set_control(const PacketCtrl ctrl) { m_payload[Structure::CONTROL] = ctrl; }

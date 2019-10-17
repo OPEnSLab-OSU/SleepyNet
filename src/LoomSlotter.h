@@ -51,8 +51,10 @@ namespace LoomNet {
 
 		uint8_t get_send_slot() const { return m_send_slot; }
 		uint8_t get_recv_slot() const { return m_recv_slot; }
+		uint8_t get_recv_count() const { return m_recv_count; }
 		uint8_t get_cur_data_cycle() const { return m_cur_cycle; }
 		uint8_t get_total_slots() const { return m_state == State::SLOT_ERROR ? SLOT_ERROR : m_total_slots; }
+		uint8_t get_cycles_per_refresh() const { return m_cycles_per_refresh; }
 
 	private:
 

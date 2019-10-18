@@ -40,7 +40,8 @@ target_link_libraries(LoomNetwork LoomNetworkLib)
 option(BUILD_TESTS "Build all tests." OFF) # Makes boolean 'test' available.
 
 if (BUILD_TESTS)
-  # This adds another subdirectory, which has 'project(gtest)'.
+  # This adds another subdirectory, which has 'project(gmock)'.
+  SET(BUILD_GMOCK ON CACHE BOOL "Builds the googlemock subproject")
   add_subdirectory(ext/gtest-1.8.0)
 
   enable_testing()

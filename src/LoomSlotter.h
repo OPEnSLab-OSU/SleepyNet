@@ -4,7 +4,7 @@
 
 /**
  * Class containg some useful information and calculations for time slot information
- * meant to be generated once
+ * meant to be generated once per network
  */
 
 namespace LoomNet {

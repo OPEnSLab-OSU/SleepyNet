@@ -45,6 +45,9 @@
     <ClCompile Include="..\..\..\src\LoomSlotter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\LoomMAC2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\LoomNetwork.h">
@@ -84,6 +87,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\LoomNetworkTime.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\LoomMAC2.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

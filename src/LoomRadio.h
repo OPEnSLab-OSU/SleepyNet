@@ -9,6 +9,11 @@
 
 namespace LoomNet {
 
+	class TimeSource {
+		// networks gotta keep time
+		virtual TimeInterval get_time() const = 0;
+	};
+
 	class Radio {
 	public:
 		enum class State {
@@ -18,8 +23,6 @@ namespace LoomNet {
 			ERROR,
 		};
 
-		// the radio needs to keep time, as does the rest of the network
-		virtual TimeInterval get_time() const = 0;
 		// get the radio state
 		virtual State get_state() const = 0;
 		// initialize and configure the radio

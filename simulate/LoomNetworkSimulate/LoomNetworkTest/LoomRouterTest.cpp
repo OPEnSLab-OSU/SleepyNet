@@ -4,7 +4,7 @@
 using namespace LoomNet;
 
 TEST(Router, FromEndDeviceOne) {
-	Router router(DeviceType::END_DEVICE, 0x0001, ADDR_COORD, 0, 0);
+	Router router(0x0001, 0, 0);
 	ASSERT_EQ(router.route(0x0001), ADDR_ERROR);
 	ASSERT_EQ(router.route(ADDR_COORD), ADDR_COORD);
 	ASSERT_EQ(router.route(0x1001), ADDR_COORD);
@@ -12,7 +12,7 @@ TEST(Router, FromEndDeviceOne) {
 }
 
 TEST(Router, FromRouterOne) {
-	Router router(DeviceType::FIRST_ROUTER, 0x1000, ADDR_COORD, 2, 2);
+	Router router(0x1000, 2, 2);
 	ASSERT_EQ(router.route(0x1000), ADDR_ERROR);
 	ASSERT_EQ(router.route(0x1300), ADDR_ERROR);
 	ASSERT_EQ(router.route(0x1003), ADDR_ERROR);
@@ -28,7 +28,7 @@ TEST(Router, FromRouterOne) {
 }
 
 TEST(Router, FromRouterOneRouterOne) {
-	Router router(DeviceType::SECOND_ROUTER, 0x1100, 0x1000, 0, 2);
+	Router router(0x1100, 0, 2);
 	ASSERT_EQ(router.route(0x1100), ADDR_ERROR);
 	ASSERT_EQ(router.route(0x1103), ADDR_ERROR);
 	ASSERT_EQ(router.route(0x1000), 0x1000);

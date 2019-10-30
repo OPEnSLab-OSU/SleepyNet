@@ -71,9 +71,6 @@
     <ClInclude Include="..\..\..\src\LoomSlotter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\LoomNetworkInfo.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="pgmspace.h">
       <Filter>Header Files</Filter>
     </ClInclude>

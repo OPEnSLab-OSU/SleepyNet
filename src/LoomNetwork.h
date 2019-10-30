@@ -4,7 +4,6 @@
 #include "LoomNetworkPacket.h"
 #include "LoomNetworkUtility.h"
 #include "LoomMAC.h"
-#include "LoomNetworkInfo.h"
 #include "LoomRadio.h"
 #include "LoomNetworkConfig.h"
 #include "LoomNetworkTime.h"
@@ -50,7 +49,7 @@ namespace LoomNet {
 			Packet packet;
 		};
 
-		Network(const NetworkInfo& config, const RadioImpl& radio);
+		Network(const NetworkConfig& config, const RadioImpl& radio);
 		Network(const Network& rhs);
 
 		bool operator==(const Network& rhs) const {
@@ -98,22 +97,19 @@ namespace LoomNet {
 };
 
 template<class RadioImpl, size_t send_buffer, size_t recv_buffer, size_t fingerprint_buffer>
-LoomNet::Network<RadioImpl, send_buffer, recv_buffer, fingerprint_buffer>::Network(const NetworkInfo& config, const RadioImpl& radio)
+LoomNet::Network<RadioImpl, send_buffer, recv_buffer, fingerprint_buffer>::Network(const NetworkConfig& config, const RadioImpl& radio)
 	: m_radio(radio)
-	, m_mac(config.route_info.get_self_addr(),
-		config.route_info.get_device_type(),
-		config.slot_info,
-		config.drift_info,
-		m_radio)
-	, m_router(config.route_info)
+	, m_mac(config)
+	, m_router(config.self_addr, config.router_count, config.node_count)
 	, m_rolling_id(0)
-	, m_addr(config.route_info.get_self_addr())
+	, m_addr(config.self_addr)
 	, m_buffer_send()
 	, m_buffer_recv()
 	, m_buffer_fingerprint()
 	, m_last_error(Error::NET_OK)
 	, m_status(Status::NET_SEND_RDY) {}
 
+/* TODO: fix
 template<class RadioImpl, size_t send_buffer, size_t recv_buffer, size_t fingerprint_buffer>
 LoomNet::Network<RadioImpl, send_buffer, recv_buffer, fingerprint_buffer>::Network(const Network& rhs)
 	: m_radio(rhs.m_radio)
@@ -129,7 +125,7 @@ LoomNet::Network<RadioImpl, send_buffer, recv_buffer, fingerprint_buffer>::Netwo
 	, m_buffer_recv(rhs.m_buffer_recv)
 	, m_buffer_fingerprint(rhs.m_buffer_fingerprint)
 	, m_last_error(rhs.m_last_error)
-	, m_status(rhs.m_status) {}
+	, m_status(rhs.m_status) {} */
 
 template<class RadioImpl, size_t send_buffer, size_t recv_buffer, size_t fingerprint_buffer>
 void LoomNet::Network<RadioImpl, send_buffer, recv_buffer, fingerprint_buffer>::net_sleep_wake_ack() {

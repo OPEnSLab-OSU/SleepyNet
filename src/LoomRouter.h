@@ -10,7 +10,7 @@
 namespace LoomNet {
 	class Router {
 	public:
-		Router(const DeviceType dev_type, const uint16_t self_addr, const uint16_t addr_parent, const uint8_t router_count, const uint8_t node_count);
+		Router(const uint16_t self_addr, const uint8_t router_count, const uint8_t node_count);
 
 		DeviceType get_device_type() const { return m_dev_type; }
 		uint16_t get_self_addr() const { return m_self_addr; }
@@ -54,5 +54,5 @@ namespace LoomNet {
 		const uint8_t m_router_child_count;
 	};
 
-	const Router ROUTER_ERROR = Router(DeviceType::ERROR, ADDR_ERROR, ADDR_ERROR, 0, 0);
+	const Router ROUTER_ERROR = Router(ADDR_ERROR, 0, 0);
 }

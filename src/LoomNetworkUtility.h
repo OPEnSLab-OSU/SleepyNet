@@ -38,6 +38,7 @@ namespace LoomNet {
 
 	DeviceType get_type(const uint16_t addr);
 	uint16_t get_parent(const uint16_t addr, const DeviceType type);
+	uint16_t get_child(const uint16_t self_addr, const DeviceType type, const uint8_t child_router_count, const uint8_t child_num);
 
 	// debug stuff for simulation
 	// TODO: replace this stuff with real numbers

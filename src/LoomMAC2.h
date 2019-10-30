@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "LoomSlotter.h"
-#include "LoomNetworkInfo.h"
+#include "LoomNetworkConfig.h"
 #include "LoomRadio.h"
 
 /** 
@@ -32,21 +32,20 @@ namespace LoomNet {
 
 		enum class Error {
 			MAC_INVALID_SLOTTER_STATE,
+			MAC_INVALID_SEND_PACKET,
 		};
 
-		MACState(	const DeviceType self_type,
-					const Slotter& slot,
-					const Drift& drift);
+		MACState(const NetworkConfig& config);
 		
 		State get_state() const { return m_state; }
 		SendStatus get_last_sent_status() const { return m_last_send_status; }
 		PacketCtrl get_cur_packet_type() const { return m_cur_packet_type; }
 		uint16_t get_cur_addr() const;
 		TimeInterval wake_next_time() const;
-		TimeInterval get_refresh_period() const { return m_drift.slot_length * m_slot.get_slots_per_refresh() - m_drift.max_drift; }
-		TimeInterval get_data_period() const { return m_drift.slot_length * REFRESH_CYCLE_SLOTS - m_drift.max_drift; }
+		TimeInterval get_refresh_period() const { return m_slot_length * m_slot.get_slots_per_refresh() - m_max_drift; }
+		TimeInterval get_data_period() const { return m_slot_length * REFRESH_CYCLE_SLOTS - m_max_drift; }
 		
-		void send_event();
+		void send_event(const PacketCtrl type);
 		void recv_event(const PacketCtrl type);
 		void refresh_event(const TimeInterval& recv_time, const TimeInterval& data, const TimeInterval& refresh);
 		void wake_event();
@@ -70,7 +69,11 @@ namespace LoomNet {
 		uint16_t m_slots_since_refresh;
 
 		const DeviceType m_self_type;
-		const Drift m_drift;
+		const uint16_t m_self_addr;
+		const uint8_t m_child_router_count;
+		const TimeInterval m_slot_length;
+		const TimeInterval m_min_drift;
+		const TimeInterval m_max_drift;
 	};
 
 }

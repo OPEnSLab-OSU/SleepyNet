@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "LoomNetworkUtility.h"
+#include "LoomNetworkConfig.h"
 
 /**
  * Class containg some useful information and calculations for time slot information
@@ -20,17 +21,27 @@ namespace LoomNet {
 			SLOT_ERROR
 		};
 
-		Slotter(	const uint8_t		send_slot, 
-					const uint8_t		total_slots,
-					const uint8_t		cycles_per_refresh,
-					const uint8_t		cycle_gap,
-					const uint8_t		batch_gap,
-					const uint8_t		send_count,
-					const uint8_t		recv_slot, 
-					const uint8_t		recv_count);
+		Slotter(	const uint8_t send_slot, 
+					const uint8_t total_slots,
+					const uint8_t cycles_per_refresh,
+					const uint8_t cycle_gap,
+					const uint8_t batch_gap,
+					const uint8_t send_count,
+					const uint8_t recv_slot, 
+					const uint8_t recv_count);
 		
 		Slotter(const uint8_t send_slot, const uint8_t total_slots, const uint8_t cycles_per_refresh, const uint8_t cycle_gap, const uint8_t batch_gap)
 			: Slotter(send_slot, total_slots, cycles_per_refresh, cycle_gap, batch_gap, 1, SLOT_NONE, 0) {}
+
+		Slotter(const NetworkConfig& config)
+			: Slotter(	config.send_slot, 
+						config.total_slots, 
+						config.cycles_per_refresh, 
+						config.cycle_gap, 
+						config.batch_gap,
+						config.child_node_count + config.child_router_count,
+						config.recv_slot,
+						)
 
 		bool operator==(const Slotter& rhs) const {
 			return (rhs.m_send_slot == m_send_slot)
@@ -52,7 +63,6 @@ namespace LoomNet {
 		uint8_t get_send_slot() const { return m_send_slot; }
 		uint8_t get_recv_slot() const { return m_recv_slot; }
 		uint8_t get_recv_count() const { return m_recv_count; }
-		uint8_t get_cur_device() const { return m_cur_device; }
 		uint8_t get_cur_data_cycle() const { return m_cur_cycle; }
 		uint8_t get_total_slots() const { return m_state == State::SLOT_ERROR ? SLOT_ERROR : m_total_slots; }
 		uint8_t get_cycles_per_refresh() const { return m_cycles_per_refresh; }

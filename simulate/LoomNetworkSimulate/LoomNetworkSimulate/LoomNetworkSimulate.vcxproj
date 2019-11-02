@@ -161,7 +161,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\LoomMAC.cpp" />
-    <ClCompile Include="..\..\..\src\LoomMAC2.cpp" />
     <ClCompile Include="..\..\..\src\LoomNetworkConfig.cpp" />
     <ClCompile Include="..\..\..\src\LoomNetworkPacket.cpp" />
     <ClCompile Include="..\..\..\src\LoomNetworkTime.cpp" />
@@ -175,7 +174,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\..\src\CircularBuffer.h" />
     <ClInclude Include="..\..\..\src\LoomMAC.h" />
-    <ClInclude Include="..\..\..\src\LoomMAC2.h" />
+    <ClInclude Include="..\..\..\src\LoomMACState.h" />
     <ClInclude Include="..\..\..\src\LoomNetwork.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkConfig.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkPacket.h" />

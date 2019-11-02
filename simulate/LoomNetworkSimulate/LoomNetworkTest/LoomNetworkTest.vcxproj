@@ -50,7 +50,7 @@
     <ClCompile Include="..\libraries\FastCRC\src\FastCRCsw.cpp" />
     <ClCompile Include="CircularBufferTest.cpp" />
     <ClCompile Include="JSONConfigTest.cpp" />
-    <ClCompile Include="LoomMACTest.cpp" />
+    <ClCompile Include="LoomMACStateTest.cpp" />
     <ClCompile Include="LoomPacketTest.cpp" />
     <ClCompile Include="LoomRouterTest.cpp" />
     <ClCompile Include="LoomUtilityTest.cpp" />

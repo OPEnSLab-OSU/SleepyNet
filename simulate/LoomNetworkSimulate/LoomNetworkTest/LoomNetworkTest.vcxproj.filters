@@ -36,7 +36,9 @@
     </ClCompile>
     <ClCompile Include="JSONConfigTest.cpp" />
     <ClCompile Include="LoomUtilityTest.cpp" />
-    <ClCompile Include="LoomMACTest.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\lib\native\src\gtest\gtest-all.cc" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\lib\native\src\gmock\gmock-all.cc" />
+    <ClCompile Include="LoomMACStateTest.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />

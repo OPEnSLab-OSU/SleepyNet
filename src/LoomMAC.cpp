@@ -1,6 +1,6 @@
 #include "LoomMAC.h"
 
-LoomNet::MAC::MAC(const uint16_t self_addr, const DeviceType self_type, const Slotter& slot, const Drift& timing, Radio& radio)
+LoomNet::MAC::MAC(const uint16_t self_addr, const DeviceType self_type, const Slotter& slot, Radio& radio)
 	: m_slot(slot)
 	, m_state(State::MAC_REFRESH_WAIT)
 	, m_send_type(SendType::NONE)
@@ -14,8 +14,8 @@ LoomNet::MAC::MAC(const uint16_t self_addr, const DeviceType self_type, const Sl
 	, m_fail_count(0)
 	, m_radio(radio)
 	, m_self_addr(self_addr)
-	, m_self_type(self_type)
-	, m_timings(timing) {
+	, m_self_type(self_type) {
+	// , m_timings(timing) {
 	// error check
 	if (slot.get_state() == Slotter::State::SLOT_ERROR
 		|| self_type == DeviceType::ERROR

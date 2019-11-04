@@ -5,7 +5,6 @@
 #include "LoomNetworkUtility.h"
 #include "LoomSlotter.h"
 #include "LoomRadio.h"
-#include "LoomNetworkInfo.h"
 #include "LoomNetworkTime.h"
 
 /** 
@@ -47,7 +46,7 @@ namespace LoomNet {
 		MAC(	const uint16_t self_addr, 
 				const DeviceType self_type, 
 				const Slotter& slot,
-				const Drift& timing,
+				// const Drift& timing,
 				Radio& radio);
 
 		bool operator==(const MAC& rhs) const {
@@ -59,7 +58,7 @@ namespace LoomNet {
 		State get_status() const { return m_state; }
 		Error get_last_error() const { return m_last_error; }
 		const Slotter& get_slotter() const { return m_slot; }
-		const Drift& get_drift() const { return m_timings; }
+		// const Drift& get_drift() const { return m_timings; }
 		uint16_t get_cur_send_address() const { return m_cur_send_addr; }
 
 		void reset();
@@ -95,7 +94,7 @@ namespace LoomNet {
 		Radio& m_radio;
 		const uint16_t m_self_addr;
 		const DeviceType m_self_type;
-		const Drift m_timings;
+		// const Drift m_timings;
 		// TODO: remove
 		int m_check_count = 0;
 	};

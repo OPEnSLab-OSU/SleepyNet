@@ -5,7 +5,6 @@
 #include "../../../src/CircularBuffer.h"
 #include "../../../src/LoomRouter.h"
 #include "../../../src/LoomNetworkConfig.h"
-#include "../../../src/LoomNetworkInfo.h"
 #include "TestNetwork.h"
 #include <iostream>
 #include <vector>

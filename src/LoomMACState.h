@@ -48,6 +48,8 @@ namespace LoomNet {
 		TimeInterval wake_next_time() const;
 
 		DeviceType get_device_type() const { return m_self_type; }
+		SlotType& get_slotter() { return m_slot; }
+		const SlotType& get_slotter() const { return m_slot; }
 
 		void begin();
 		void send_event(const PacketCtrl type);

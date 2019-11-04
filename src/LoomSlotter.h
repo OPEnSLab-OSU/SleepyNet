@@ -34,14 +34,14 @@ namespace LoomNet {
 			: Slotter(send_slot, total_slots, cycles_per_refresh, cycle_gap, batch_gap, 1, SLOT_NONE, 0) {}
 
 		Slotter(const NetworkConfig& config)
-			: Slotter(	config.send_slot, 
-						config.total_slots, 
-						config.cycles_per_refresh, 
-						config.cycle_gap, 
-						config.batch_gap,
-						config.child_node_count + config.child_router_count,
-						config.recv_slot,
-						)
+			: Slotter(config.send_slot,
+				config.total_slots,
+				config.cycles_per_refresh,
+				config.cycle_gap,
+				config.batch_gap,
+				config.send_count,
+				config.recv_slot,
+				config.recv_count) {}
 
 		bool operator==(const Slotter& rhs) const {
 			return (rhs.m_send_slot == m_send_slot)

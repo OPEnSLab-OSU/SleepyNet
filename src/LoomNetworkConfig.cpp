@@ -178,7 +178,7 @@ uint16_t LoomNet::get_addr(const JsonObjectConst& topology, const char* name) {
 	return m_recurse_traverse(topology["root"], name, obj, depth);
 }
 
-NetworkInfo LoomNet::read_network_topology(const JsonObjectConst& topology, const char* self_name) {
+NetworkConfig LoomNet::read_network_topology(const JsonObjectConst& topology, const char* self_name) {
 	// read the "root" structure
 	// device type
 	DeviceType type = DeviceType::ERROR;
@@ -292,27 +292,19 @@ NetworkInfo LoomNet::read_network_topology(const JsonObjectConst& topology, cons
 		|| max_drift.is_none()) return NETWORK_ERROR;
 	// return it all! jesus christ
 	return {
-		{
-			type,
-			address,
-			parent,
-			router_count,
-			node_count,
-		},
-		{
-			self_slot,
-			total_slots,
-			cycles_per_batch,
-			cycle_gap,
-			batch_gap,
-			send_slots,
-			child_slot,
-			child_slot_count
-		},
-		{
-			min_drift,
-			max_drift,
-			slot_length
-		}
+		self_slot,
+		total_slots,
+		cycles_per_batch,
+		cycle_gap,
+		batch_gap,
+		send_slots,
+		child_slot,
+		child_slot_count,
+		address,
+		router_count,
+		node_count,
+		min_drift,
+		max_drift,
+		slot_length
 	};
 }

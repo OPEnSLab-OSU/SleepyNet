@@ -18,11 +18,23 @@ protected:
 		deserializeJson(m_doc, get_json());
 	}
 
-	void test_config(const char* const name, const Router& truth_router, const Slotter& truth_slotter, const Drift& truth_drifer) const {
-		const NetworkInfo cfg = read_network_topology(m_doc.as<JsonObjectConst>(), name);
-		EXPECT_EQ(cfg.route_info, truth_router);
-		EXPECT_EQ(cfg.slot_info, truth_slotter);
-		EXPECT_EQ(cfg.drift_info, truth_drifer);
+	void test_config(const char* const name, const NetworkConfig& truth) const {
+		const NetworkConfig& cfg = read_network_topology(m_doc.as<JsonObjectConst>(), name);
+		EXPECT_EQ(cfg.send_slot, truth.send_slot);
+		EXPECT_EQ(cfg.total_slots, truth.total_slots);
+		EXPECT_EQ(cfg.cycles_per_refresh, truth.cycles_per_refresh);
+		EXPECT_EQ(cfg.cycle_gap, truth.cycle_gap);
+		EXPECT_EQ(cfg.batch_gap, truth.batch_gap);
+		EXPECT_EQ(cfg.send_count, truth.send_count);
+		EXPECT_EQ(cfg.recv_slot, truth.recv_slot);
+		EXPECT_EQ(cfg.recv_count, truth.recv_count);
+		EXPECT_EQ(cfg.self_addr, truth.self_addr);
+		EXPECT_EQ(cfg.child_router_count, truth.child_router_count);
+		EXPECT_EQ(cfg.child_node_count, truth.child_node_count);
+		EXPECT_EQ(cfg.min_drift, truth.min_drift);
+		EXPECT_EQ(cfg.max_drift, truth.max_drift);
+		EXPECT_EQ(cfg.slot_length, truth.slot_length);
+		EXPECT_EQ(cfg, truth);
 	}
 
 	DynamicJsonDocument m_doc;
@@ -31,12 +43,6 @@ protected:
 class SimpleConfigFixture : public ConfigFixtureBase {
 protected:
 	const static char config[];
-
-	const Drift drift_truth{
-		TimeInterval(TimeInterval::SECOND, 3),
-		TimeInterval(TimeInterval::SECOND, 10),
-		TimeInterval(TimeInterval::SECOND, 10),
-	};
 
 	const char* get_json() const override {
 		return config;
@@ -89,56 +95,57 @@ const char SimpleConfigFixture::config[] = "\
 }}";
 
 TEST_F(SimpleConfigFixture, Coordinator) {
-	test_config("Coordinator",
-		Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 0, 4),
-		Slotter(SLOT_NONE, 4, 2, 1, 1, 0, 0, 4),
-		drift_truth);
+	test_config("Coordinator", { 
+		SLOT_NONE, 4, 2, 1, 1, 0, 0, 4,
+		ADDR_COORD, 0, 4,
+		TimeInterval(TimeInterval::SECOND, 3),
+		TimeInterval(TimeInterval::SECOND, 10),
+		TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(SimpleConfigFixture, EndDevice1) {
-	test_config("End Device 1",
-		Router(DeviceType::END_DEVICE, 0x0001, ADDR_COORD, 0, 0),
-		Slotter(0, 4, 2, 1, 1),
-		drift_truth);
+	test_config("End Device 1", {
+			0, 4, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x0001, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(SimpleConfigFixture, EndDevice2) {
-	test_config("End Device 2",
-		Router(DeviceType::END_DEVICE, 0x0002, ADDR_COORD, 0, 0),
-		Slotter(1, 4, 2, 1, 1),
-		drift_truth);
+	test_config("End Device 2", {
+			1, 4, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x0002, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(SimpleConfigFixture, EndDevice3) {
-	test_config("End Device 3",
-		Router(DeviceType::END_DEVICE, 0x0003, ADDR_COORD, 0, 0),
-		Slotter(2, 4, 2, 1, 1),
-		drift_truth);
+	test_config("End Device 3", {
+			2, 4, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x0003, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(SimpleConfigFixture, EndDevice4) {
-	test_config("End Device 4",
-		Router(DeviceType::END_DEVICE, 0x0004, ADDR_COORD, 0, 0),
-		Slotter(3, 4, 2, 1, 1),
-		drift_truth);
+	test_config("End Device 4", {
+			3, 4, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x0004, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(SimpleConfigFixture, Error) {
-	test_config("Error",
-		ROUTER_ERROR,
-		SLOTTER_ERROR,
-		DRIFT_ERROR);
+	test_config("Error", NETWORK_ERROR);
 }
 
 class DeepConfigFixture : public ConfigFixtureBase {
 protected:
 	const static char config[];
-
-	const Drift drift_truth{
-		TimeInterval(TimeInterval::SECOND, 3),
-		TimeInterval(TimeInterval::SECOND, 10),
-		TimeInterval(TimeInterval::SECOND, 10),
-	};
 
 	const char* get_json() const override {
 		return config;
@@ -192,49 +199,53 @@ const char DeepConfigFixture::config[] = "{\
 }}";
 
 TEST_F(DeepConfigFixture, Coordinator) {
-	test_config("Coord",
-		Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 1, 0),
-		Slotter(SLOT_NONE, 5, 2, 1, 1, 0, 3, 2),
-		drift_truth);
+	test_config("Coord", {
+			SLOT_NONE, 5, 2, 1, 1, 0, 3, 2,
+			ADDR_COORD, 1, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(DeepConfigFixture, Device1) {
-	test_config("Device 1",
-		Router(DeviceType::FIRST_ROUTER, 0x1000, ADDR_COORD, 1, 1),
-		Slotter(3, 5, 2, 1, 1, 2, 1, 2),
-		drift_truth);
+	test_config("Device 1", {
+			3, 5, 2, 1, 1, 2, 1, 2,
+			0x1000, 1, 1,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(DeepConfigFixture, Device2) {
-	test_config("Device 2",
-		Router(DeviceType::SECOND_ROUTER, 0x1100, 0x1000, 0, 1),
-		Slotter(1, 5, 2, 1, 1, 1, 0, 1),
-		drift_truth);
+	test_config("Device 2", {
+		1, 5, 2, 1, 1, 1, 0, 1,
+		0x1100, 0, 1,
+		TimeInterval(TimeInterval::SECOND, 3),
+		TimeInterval(TimeInterval::SECOND, 10),
+		TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(DeepConfigFixture, Device3) {
-	test_config("Device 3",
-		Router(DeviceType::END_DEVICE, 0x1101, 0x1100, 0, 0),
-		Slotter(0, 5, 2, 1, 1),
-		drift_truth);
+	test_config("Device 3", {
+			0, 5, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x1101, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(DeepConfigFixture, Device4) {
-	test_config("Device 4",
-		Router(DeviceType::END_DEVICE, 0x1001, 0x1000, 0, 0),
-		Slotter(2, 5, 2, 1, 1),
-		drift_truth);
+	test_config("Device 4", {
+			2, 5, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x1001, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 class FullConfigFixture : public ConfigFixtureBase {
 protected:
 	const static char config[];
-
-	const Drift drift_truth{
-		TimeInterval(TimeInterval::SECOND, 3),
-		TimeInterval(TimeInterval::SECOND, 10),
-		TimeInterval(TimeInterval::SECOND, 10),
-	};
 
 	const char* get_json() const override {
 		return config;
@@ -361,120 +372,149 @@ const char FullConfigFixture::config[] = "\
 }}";
 
 TEST_F(FullConfigFixture, Router3Router1EndDevice1) {
-	test_config("Router 3 Router 1 End Device 1",
-		Router(DeviceType::END_DEVICE, 0x3101, 0x3100, 0, 0),
-		Slotter(3, 24, 2, 1, 1),
-		drift_truth);
+	test_config("Router 3 Router 1 End Device 1", {
+			3, 24, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x3101, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router3Router1) {
-	test_config("Router 3 Router 1",
-		Router(DeviceType::SECOND_ROUTER, 0x3100, 0x3000, 0, 1),
-		Slotter(12, 24, 2, 1, 1, 1, 3, 1),
-		drift_truth);
+	test_config("Router 3 Router 1", {
+			12, 24, 2, 1, 1, 1, 3, 1,
+			0x3100, 0, 1,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router3) {
-	test_config("Router 3",
-		Router(DeviceType::FIRST_ROUTER, 0x3000, ADDR_COORD, 1, 0),
-		Slotter(22, 24, 2, 1, 1, 1, 12, 1),
-		drift_truth);
+	test_config("Router 3", {
+			22, 24, 2, 1, 1, 1, 12, 1,
+			0x3000, 1, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router2EndDevice1) {
-	test_config("Router 2 End Device 1",
-		Router(DeviceType::END_DEVICE, 0x2001, 0x2000, 0, 0),
-		Slotter(11, 24, 2, 1, 1),
-		drift_truth);
+	test_config("Router 2 End Device 1", {
+			11, 24, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x2001, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router2) {
-	test_config("Router 2",
-		Router(DeviceType::FIRST_ROUTER, 0x2000, ADDR_COORD, 0, 1),
-		Slotter(20, 24, 2, 1, 1, 2, 11, 1),
-		drift_truth);
+	test_config("Router 2", {
+			20, 24, 2, 1, 1, 2, 11, 1,
+			0x2000, 0, 1,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router1EndDevice3) {
-	test_config("Router 1 End Device 3",
-		Router(DeviceType::END_DEVICE, 0x1003, 0x1000, 0, 0),
-		Slotter(10, 24, 2, 1, 1),
-		drift_truth);
+	test_config("Router 1 End Device 3", {
+			10, 24, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x1003, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router1Router2) {
-	test_config("Router 1 Router 2",
-		Router(DeviceType::SECOND_ROUTER, 0x1200, 0x1000, 0, 2),
-		Slotter(5, 24, 2, 1, 1, 3, 1, 2),
-		drift_truth);
+	test_config("Router 1 Router 2", {
+			5, 24, 2, 1, 1, 3, 1, 2,
+			0x1200, 0, 2,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router1Router2EndDevice1) {
-	test_config("Router 1 Router 2 End Device 1",
-		Router(DeviceType::END_DEVICE, 0x1201, 0x1200, 0, 0),
-		Slotter(1, 24, 2, 1, 1),
-		drift_truth);
+	test_config("Router 1 Router 2 End Device 1", {
+			1, 24, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x1201, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router1Router2EndDevice2) {
-	test_config("Router 1 Router 2 End Device 2",
-		Router(DeviceType::END_DEVICE, 0x1202, 0x1200, 0, 0),
-		Slotter(2, 24, 2, 1, 1),
-		drift_truth);
+	test_config("Router 1 Router 2 End Device 2", {
+			2, 24, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x1202, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router1Router1) {
-	test_config("Router 1 Router 1",
-		Router(DeviceType::SECOND_ROUTER, 0x1100, 0x1000, 0, 1),
-		Slotter(4, 24, 2, 1, 1, 1, 0, 1),
-		drift_truth);
+	test_config("Router 1 Router 1", {
+			4, 24, 2, 1, 1, 1, 0, 1,
+			0x1100, 0, 1,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router1Router1EndDevice1) {
-	test_config("Router 1 Router 1 End Device 1",
-		Router(DeviceType::END_DEVICE, 0x1101, 0x1100, 0, 0),
-		Slotter(0, 24, 2, 1, 1),
-		drift_truth);
+	test_config("Router 1 Router 1 End Device 1", {
+			0, 24, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x1101, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router1EndDevice2) {
-	test_config("Router 1 End Device 2",
-		Router(DeviceType::END_DEVICE, 0x1002, 0x1000, 0, 0),
-		Slotter(9, 24, 2, 1, 1),
-		drift_truth);
+	test_config("Router 1 End Device 2", {
+			9, 24, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x1002, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router1EndDevice1) {
-	test_config("Router 1 End Device 1",
-		Router(DeviceType::END_DEVICE, 0x1001, 0x1000, 0, 0),
-		Slotter(8, 24, 2, 1, 1),
-		drift_truth);
+	test_config("Router 1 End Device 1", {
+			8, 24, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x1001, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Router1) {
-	test_config("Router 1",
-		Router(DeviceType::FIRST_ROUTER, 0x1000, ADDR_COORD, 2, 3),
-		Slotter(13, 24, 2, 1, 1, 7, 4, 7),
-		drift_truth);
+	test_config("Router 1", {
+			13, 24, 2, 1, 1, 7, 4, 7,
+			0x1000, 2, 3,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, EndDevice1) {
-	test_config("End Device 1",
-		Router(DeviceType::END_DEVICE, 0x0001, ADDR_COORD, 0, 0),
-		Slotter(23, 24, 2, 1, 1),
-		drift_truth);
+	test_config("End Device 1", {
+			23, 24, 2, 1, 1, 1, SLOT_NONE, 0,
+			0x0001, 0, 0,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Coordinator) {
-	test_config("Coordinator",
-		Router(DeviceType::COORDINATOR, ADDR_COORD, ADDR_NONE, 3, 1),
-		Slotter(SLOT_NONE, 24, 2, 1, 1, 0, 13, 11),
-		drift_truth);
+	test_config("Coordinator", {
+			SLOT_NONE, 24, 2, 1, 1, 0, 13, 11,
+			ADDR_COORD, 3, 1,
+			TimeInterval(TimeInterval::SECOND, 3),
+			TimeInterval(TimeInterval::SECOND, 10),
+			TimeInterval(TimeInterval::SECOND, 10) });
 }
 
 TEST_F(FullConfigFixture, Error) {
-	test_config("Error",
-		ROUTER_ERROR,
-		SLOTTER_ERROR,
-		DRIFT_ERROR);
+	test_config("Error", NETWORK_ERROR);
 }

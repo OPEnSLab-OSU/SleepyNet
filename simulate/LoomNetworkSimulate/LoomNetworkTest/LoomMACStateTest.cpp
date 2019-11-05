@@ -1,7 +1,7 @@
 #include "pch.h"
+#include <utility>
 #include "gmock/gmock.h"
 #include "../../../src/LoomMACState.h"
-#include "../../../src/LoomRadio.h"
 
 using namespace LoomNet;
 using ::testing::Sequence;
@@ -23,12 +23,35 @@ public:
 	MOCK_METHOD(uint16_t, get_slots_per_refresh, (), (const));
 	MOCK_METHOD(void, reset, ());
 
-	void set_next_state(const Slotter::State prev_state, const Slotter::State next_state, const uint8_t wait) {
-		Sequence s1, s2;
-		EXPECT_CALL(*this, get_state).Times(AnyNumber()).InSequence(s1, s2).WillRepeatedly(Return(prev_state));
-		EXPECT_CALL(*this, next_state).Times(1).InSequence(s1, s2).WillOnce(Return(next_state)).RetiresOnSaturation();
-		EXPECT_CALL(*this, get_state).Times(AnyNumber()).InSequence(s1).WillRepeatedly(Return(next_state));
-		EXPECT_CALL(*this, get_slot_wait).Times(AnyNumber()).InSequence(s1).WillRepeatedly(Return(wait));
+	void start(std::pair<Sequence, Sequence>& seq) const {
+		// and make sure it is reset at least once
+		EXPECT_CALL(*this, reset)
+			.Times(1)
+			.InSequence(seq.first, seq.second)
+			.RetiresOnSaturation();
+		// set the first slotter state to wait refresh
+		EXPECT_CALL(*this, get_state)
+			.Times(AnyNumber())
+			.InSequence(seq.first, seq.second)
+			.WillRepeatedly(Return(Slotter::State::SLOT_WAIT_REFRESH));
+	}
+
+	void set_next_state(const Slotter::State next_state, const uint8_t wait, std::pair<Sequence, Sequence>& seq) const {
+		// next_state call
+		EXPECT_CALL(*this, next_state)
+			.Times(1)
+			.InSequence(seq.first, seq.second)
+			.WillOnce(Return(next_state))
+			.RetiresOnSaturation();
+		// get_state and get_slot_wait calls after
+		EXPECT_CALL(*this, get_state)
+			.Times(AnyNumber())
+			.InSequence(seq.first)
+			.WillRepeatedly(Return(next_state));
+		EXPECT_CALL(*this, get_slot_wait)
+			.Times(AnyNumber())
+			.InSequence(seq.second)
+			.WillRepeatedly(Return(wait));
 	}
 };
 
@@ -59,10 +82,6 @@ protected:
 		// check the initial state of the MACState
 		EXPECT_EQ(mac.get_state(), State::MAC_CLOSED);
 		EXPECT_NE(mac.get_device_type(), DeviceType::ERROR);
-		// make sure the slotter is reset on start
-		EXPECT_CALL(mac.get_slotter(), reset)
-			.Times(1)
-			.RetiresOnSaturation();
 		// start er up
 		mac.begin();
 		// start the MAC
@@ -126,16 +145,21 @@ const NetworkConfig MACStateFixture::config_end = {
 TEST_P(MACStateFixture, RefreshCoord) {
 	const NetworkConfig& config = *GetParam();
 	MAC test_mac(config);
+	const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+	std::pair<Sequence, Sequence> seq;
+	// set the slotters start expectations
+	slot.start(seq);
+	// and set the next state to what it would actually be
 	if (get_type(config.self_addr) == DeviceType::END_DEVICE)
-		test_mac.get_slotter().set_next_state(Slotter::State::SLOT_WAIT_REFRESH, Slotter::State::SLOT_SEND_W_SYNC, 5);
+		slot.set_next_state(Slotter::State::SLOT_SEND_W_SYNC, 5, seq);
 	else
-		test_mac.get_slotter().set_next_state(Slotter::State::SLOT_WAIT_REFRESH, Slotter::State::SLOT_RECV_W_SYNC, 5);
-	
+		slot.set_next_state(Slotter::State::SLOT_RECV_W_SYNC, 5, seq);
+	// with those expectations, start the MAC!
 	start(test_mac, config);
 }
 
 INSTANTIATE_TEST_SUITE_P(RefreshState, MACStateFixture,
 	::testing::Values(	&MACStateFixture::config_coord, 
-						&MACStateFixture::config_end, 
 						&MACStateFixture::config_router2, 
-						&MACStateFixture::config_router1));
+						&MACStateFixture::config_router1,
+						&MACStateFixture::config_end));

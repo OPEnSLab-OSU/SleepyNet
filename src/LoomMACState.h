@@ -10,9 +10,14 @@
  * to allow for simpler testing
  */
 
+class DoNothing {
+public:
+	constexpr void operator()(uint8_t error, uint8_t expectect_state) const {};
+};
+
 namespace LoomNet {
 
-	template<class SlotType = LoomNet::Slotter>
+	template<class SlotType = LoomNet::Slotter, class ErrorType = DoNothing>
 	class MACState {
 	public:
 		enum class State {
@@ -32,11 +37,12 @@ namespace LoomNet {
 		};
 
 		enum class Error {
+			MAC_INVALID_FUNC_CALL,
 			MAC_INVALID_SLOTTER_STATE,
 			MAC_INVALID_SEND_PACKET,
 		};
 
-		MACState(const NetworkConfig& config);
+		MACState(const NetworkConfig& config, const ErrorType& error = ErrorType());
 		
 		State get_state() const { return m_state; }
 		SendStatus get_last_sent_status() const { return m_last_send_status; }
@@ -60,8 +66,13 @@ namespace LoomNet {
 
 	private:
 
-		void m_halt_error(const State expected_state);
-		void m_halt_error(const Error error);
+		void m_halt_error(const State expected_state) const {
+			m_error_handle(	static_cast<uint8_t>(Error::MAC_INVALID_FUNC_CALL), 
+							static_cast<uint8_t>(expected_state));
+		}
+		void m_halt_error(const Error error) const {
+			m_error_handle(static_cast<uint8_t>(error), 255);
+		}
 
 		State m_state;
 		SendStatus m_last_send_status;
@@ -79,10 +90,11 @@ namespace LoomNet {
 		const TimeInterval m_slot_length;
 		const TimeInterval m_min_drift;
 		const TimeInterval m_max_drift;
+		const ErrorType m_error_handle;
 	};
 
-	template <class T>
-	MACState<T>::MACState(const NetworkConfig& config)
+	template <class T, class E>
+	MACState<T, E>::MACState(const NetworkConfig& config, const E& error)
 		: m_state(State::MAC_CLOSED)
 		, m_last_send_status(SendStatus::NONE)
 		, m_cur_packet_type(PacketCtrl::NONE)
@@ -96,10 +108,11 @@ namespace LoomNet {
 		, m_child_router_count(config.child_router_count)
 		, m_slot_length(config.slot_length)
 		, m_min_drift(config.min_drift)
-		, m_max_drift(config.max_drift) {}
+		, m_max_drift(config.max_drift)
+		, m_error_handle(error) {}
 
-	template <class T>
-	TimeInterval MACState<T>::wake_next_time() const {
+	template <class T, class E>
+	TimeInterval MACState<T, E>::wake_next_time() const {
 		const Slotter::State state = m_slot.get_state();
 		// we correct for drift by moving the recieving device backwards
 		// and leaving the send device in the normal time
@@ -125,8 +138,8 @@ namespace LoomNet {
 			return next_wake;
 	}
 
-	template <class T>
-	void MACState<T>::begin() {
+	template <class T, class E>
+	void MACState<T, E>::begin() {
 		m_last_send_status = SendStatus::NONE;
 		m_slot.reset();
 		m_slots_since_refresh = 0;
@@ -143,8 +156,8 @@ namespace LoomNet {
 	}
 
 	// an end device or router has recieved a refresh packet, or a coordinator has sent the refresh packet, so the network starts now!
-	template <class T>
-	void MACState<T>::refresh_event(const TimeInterval& timestamp, const TimeInterval& data, const TimeInterval& refresh) {
+	template <class T, class E>
+	void MACState<T, E>::refresh_event(const TimeInterval& timestamp, const TimeInterval& data, const TimeInterval& refresh) {
 		if (m_state != State::MAC_WAIT_REFRESH && m_state != State::MAC_SEND_REFRESH)
 			m_halt_error(State::MAC_WAIT_REFRESH);
 		// set the network
@@ -157,8 +170,8 @@ namespace LoomNet {
 		m_state = State::MAC_SLEEP_RDY;
 	}
 
-	template <class T>
-	void MACState<T>::wake_event() {
+	template <class T, class E>
+	void MACState<T, E>::wake_event() {
 		using SlotState = Slotter::State;
 		const SlotState cur_state = m_slot.get_state();
 		// increment the slot wait counter, if the wait was not synchronized
@@ -185,8 +198,8 @@ namespace LoomNet {
 		m_slot.next_state();
 	}
 
-	template <class T>
-	void MACState<T>::send_event(const PacketCtrl type) {
+	template <class T, class E>
+	void MACState<T, E>::send_event(const PacketCtrl type) {
 		if (m_state != State::MAC_SEND_RDY)
 			return m_halt_error(State::MAC_SEND_RDY);
 		// based on the current packet type, wait for a new packet type or sleep
@@ -208,8 +221,8 @@ namespace LoomNet {
 		}
 	}
 
-	template <class T>
-	void MACState<T>::recv_event(const PacketCtrl type, const uint16_t addr) {
+	template <class T, class E>
+	void MACState<T, E>::recv_event(const PacketCtrl type, const uint16_t addr) {
 		if (m_state != State::MAC_RECV_RDY)
 			return m_halt_error(State::MAC_RECV_RDY);
 		// check for an invalid packet type
@@ -241,8 +254,8 @@ namespace LoomNet {
 		}
 	}
 
-	template <class T>
-	void MACState<T>::recv_fail() {
+	template <class T, class E>
+	void MACState<T, E>::recv_fail() {
 		// we were waiting for something but got something else
 		m_last_send_status = SendStatus::MAC_SEND_NO_ACK;
 		m_state = State::MAC_SLEEP_RDY;

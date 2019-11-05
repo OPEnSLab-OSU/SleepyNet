@@ -17,6 +17,7 @@
 #include <utility>
 #include <random>
 
+/*
 class Int {
 public:
 	Int(int i) : m_i(i) {}
@@ -85,10 +86,11 @@ bool test_network_operation(TestNetwork& network, const int drop_rate) {
 	}
 	return true;
 }
+*/
 
 int main()
 {
-
+	/* TODO: rewrite integrations tests 
 	std::cout << "Hello World!\n"; 
 
 	std::cout << "Begin testing circular buffer!\n";
@@ -200,7 +202,7 @@ int main()
 	{
 		using namespace LoomNet;
 
-		/*// simulation five: simple net!
+		// simulation five: simple net!
 		std::cout << "Begin simple network test!" << std::endl;
 		{
 			StaticJsonDocument<size> json;
@@ -210,7 +212,7 @@ int main()
 
 			if (!test_network_operation(network, 0)) return false;
 		}
-		std::cout << "Simple network passed!" << std::endl;*/
+		std::cout << "Simple network passed!" << std::endl;
 
 		std::cout << "begin idle test" << std::endl;
 		{
@@ -283,5 +285,5 @@ int main()
 		std::cout << "Lossyer single send test passed!" << std::endl;
 	}
 
-	std::cout << "end testing Loom Network operation" << std::endl;
+	std::cout << "end testing Loom Network operation" << std::endl; */
 }

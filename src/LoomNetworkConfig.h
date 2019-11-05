@@ -19,7 +19,7 @@ namespace LoomNet {
 		const uint8_t recv_slot;
 		const uint8_t recv_count;
 
-		const uint8_t self_addr;
+		const uint16_t self_addr;
 		const uint8_t child_router_count;
 		const uint8_t child_node_count;
 

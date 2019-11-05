@@ -3,7 +3,7 @@
 LoomNet::Router::Router(const uint16_t self_addr, const uint8_t router_count, const uint8_t node_count)
 	: m_dev_type(get_type(self_addr))
 	, m_self_addr(self_addr)
-	, m_addr_parent(get_parent(self_addr))
+	, m_addr_parent(get_parent(self_addr, m_dev_type))
 	, m_node_child_count(node_count)
 	, m_router_child_count(router_count) {}
 

@@ -1,5 +1,5 @@
 #include "LoomMAC.h"
-
+/*
 LoomNet::MAC::MAC(const uint16_t self_addr, const DeviceType self_type, const Slotter& slot, Radio& radio)
 	: m_slot(slot)
 	, m_state(State::MAC_REFRESH_WAIT)
@@ -353,3 +353,4 @@ void LoomNet::MAC::m_halt_error(const Error error) {
 		}
 	}
 }
+*/

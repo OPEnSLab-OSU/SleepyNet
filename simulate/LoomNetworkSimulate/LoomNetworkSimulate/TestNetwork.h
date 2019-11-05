@@ -4,7 +4,6 @@
 #include "../../../src/CircularBuffer.h"
 #include "../../../src/LoomRouter.h"
 #include "../../../src/LoomNetworkConfig.h"
-#include "../../../src/LoomNetworkInfo.h"
 #include <iostream>
 #include <vector>
 #include <bitset>
@@ -17,6 +16,7 @@
 #include <random>
 #include <map>
 
+/*
 class NulStreambuf : public std::streambuf
 {
 	char                dummyBuffer[64];
@@ -327,3 +327,4 @@ public:
 	std::ostream null_stream;
 	Error last_error;
 };
+*/

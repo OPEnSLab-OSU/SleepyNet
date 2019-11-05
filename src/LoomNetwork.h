@@ -13,6 +13,7 @@
  * Operates asynchronously
  */
 
+/* TODO: refactor
 namespace LoomNet {
 	template<class RadioImpl, size_t send_buffer = 16U, size_t recv_buffer = 16U, size_t fingerprint_buffer = 32U>
 	class Network {
@@ -125,7 +126,7 @@ LoomNet::Network<RadioImpl, send_buffer, recv_buffer, fingerprint_buffer>::Netwo
 	, m_buffer_recv(rhs.m_buffer_recv)
 	, m_buffer_fingerprint(rhs.m_buffer_fingerprint)
 	, m_last_error(rhs.m_last_error)
-	, m_status(rhs.m_status) {} */
+	, m_status(rhs.m_status) {} 
 
 template<class RadioImpl, size_t send_buffer, size_t recv_buffer, size_t fingerprint_buffer>
 void LoomNet::Network<RadioImpl, send_buffer, recv_buffer, fingerprint_buffer>::net_sleep_wake_ack() {
@@ -308,6 +309,6 @@ void LoomNet::Network<RadioImpl, send_buffer, recv_buffer, fingerprint_buffer>::
 		m_status |= Status::NET_SLEEP_RDY;
 	else
 		m_status &= ~Status::NET_SLEEP_RDY;
-}
+} */
 
 

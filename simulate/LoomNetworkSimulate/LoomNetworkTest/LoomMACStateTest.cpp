@@ -4,7 +4,7 @@
 #include "../../../src/LoomRadio.h"
 
 using namespace LoomNet;
-using ::testing::InSequence;
+using ::testing::Sequence;
 using ::testing::Return;
 using ::testing::ReturnPointee;
 using ::testing::StrictMock;
@@ -23,16 +23,18 @@ public:
 	MOCK_METHOD(uint16_t, get_slots_per_refresh, (), (const));
 	MOCK_METHOD(void, reset, ());
 
-	void set_next_state(const Slotter::State state, const uint8_t wait) {
-		EXPECT_CALL(*this, next_state).Times(1).WillOnce(Return(state));
-		ON_CALL(*this, get_state).WillByDefault(Return(state));
-		ON_CALL(*this, get_slot_wait).WillByDefault(Return(wait));
+	void set_next_state(const Slotter::State prev_state, const Slotter::State next_state, const uint8_t wait) {
+		Sequence s1, s2;
+		EXPECT_CALL(*this, get_state).Times(AnyNumber()).InSequence(s1, s2).WillRepeatedly(Return(prev_state));
+		EXPECT_CALL(*this, next_state).Times(1).InSequence(s1, s2).WillOnce(Return(next_state)).RetiresOnSaturation();
+		EXPECT_CALL(*this, get_state).Times(AnyNumber()).InSequence(s1).WillRepeatedly(Return(next_state));
+		EXPECT_CALL(*this, get_slot_wait).Times(AnyNumber()).InSequence(s1).WillRepeatedly(Return(wait));
 	}
 };
 
 // setup some utility functions to test a sequence of state transitions
 // in the MAC layer
-class MACStateFixture : public ::testing::TestWithParam<const NetworkConfig&> {
+class MACStateFixture : public ::testing::TestWithParam<const NetworkConfig*> {
 public:
 	static const NetworkConfig config_end;
 	static const NetworkConfig config_router1;
@@ -43,7 +45,14 @@ protected:
 	void SetUp() override {}
 	void TearDown() override {}
 
-	using MAC = MACState<StrictMock<MockSlotter>>;
+	class ErrorType {
+	public:
+		void operator()(uint8_t error, uint8_t expectect_state) const {
+			ADD_FAILURE() << "Got error " << error << " and state " << expectect_state << " from the MAC";
+		}
+	};
+
+	using MAC = MACState<StrictMock<MockSlotter>, ErrorType>;
 	using State = MAC::State;
 
 	void start(MAC& mac, const NetworkConfig& config) {
@@ -51,9 +60,12 @@ protected:
 		EXPECT_EQ(mac.get_state(), State::MAC_CLOSED);
 		EXPECT_NE(mac.get_device_type(), DeviceType::ERROR);
 		// make sure the slotter is reset on start
-		EXPECT_CALL(mac.get_slotter(), reset).Times(1).RetiresOnSaturation();
+		EXPECT_CALL(mac.get_slotter(), reset)
+			.Times(1)
+			.RetiresOnSaturation();
 		// start er up
 		mac.begin();
+		// start the MAC
 		// check that the start state is correct
 		if (mac.get_device_type() == DeviceType::COORDINATOR)
 			EXPECT_EQ(mac.get_state(), State::MAC_SEND_REFRESH);
@@ -69,9 +81,9 @@ protected:
 		// verify the sleep time is correct
 		// if we're an end device we only ever sent
 		if (get_type(config.self_addr) == DeviceType::END_DEVICE)
-			EXPECT_EQ(mac.wake_next_time(), m_data_sync);
+			EXPECT_EQ(mac.wake_next_time(), m_now + m_data_sync);
 		else
-			EXPECT_EQ(mac.wake_next_time(), m_data_sync - config.min_drift);
+			EXPECT_EQ(mac.wake_next_time(), m_now + m_data_sync - config.min_drift);
 	}
 
 	TimeInterval m_now = TimeInterval(TIME_NONE);
@@ -112,14 +124,18 @@ const NetworkConfig MACStateFixture::config_end = {
 };
 
 TEST_P(MACStateFixture, RefreshCoord) {
-	const NetworkConfig& config = GetParam();
+	const NetworkConfig& config = *GetParam();
 	MAC test_mac(config);
-	// start the MAC
+	if (get_type(config.self_addr) == DeviceType::END_DEVICE)
+		test_mac.get_slotter().set_next_state(Slotter::State::SLOT_WAIT_REFRESH, Slotter::State::SLOT_SEND_W_SYNC, 5);
+	else
+		test_mac.get_slotter().set_next_state(Slotter::State::SLOT_WAIT_REFRESH, Slotter::State::SLOT_RECV_W_SYNC, 5);
+	
 	start(test_mac, config);
 }
 
 INSTANTIATE_TEST_SUITE_P(RefreshState, MACStateFixture,
-	::testing::Values(	MACStateFixture::config_coord, 
-						MACStateFixture::config_end, 
-						MACStateFixture::config_router2, 
-						MACStateFixture::config_router1));
+	::testing::Values(	&MACStateFixture::config_coord, 
+						&MACStateFixture::config_end, 
+						&MACStateFixture::config_router2, 
+						&MACStateFixture::config_router1));

@@ -22,7 +22,7 @@ namespace LoomNet {
 		};
 
 		Slotter(	const uint8_t send_slot, 
-					const uint8_t total_slots,
+					const uint16_t total_slots,
 					const uint8_t cycles_per_refresh,
 					const uint8_t cycle_gap,
 					const uint8_t batch_gap,
@@ -64,7 +64,7 @@ namespace LoomNet {
 		uint8_t get_recv_slot() const { return m_recv_slot; }
 		uint8_t get_recv_count() const { return m_recv_count; }
 		uint8_t get_cur_data_cycle() const { return m_cur_cycle; }
-		uint8_t get_total_slots() const { return m_state == State::SLOT_ERROR ? SLOT_ERROR : m_total_slots; }
+		uint16_t get_total_slots() const { return m_state == State::SLOT_ERROR ? SLOT_ERROR : m_total_slots; }
 		uint8_t get_cycles_per_refresh() const { return m_cycles_per_refresh; }
 
 	private:
@@ -73,7 +73,7 @@ namespace LoomNet {
 		const uint8_t m_send_count;
 		const uint8_t m_recv_slot;
 		const uint8_t m_recv_count;
-		const uint8_t m_total_slots;
+		const uint16_t m_total_slots;
 		const uint8_t m_cycles_per_refresh;
 		const uint8_t m_cycle_gap;
 		const uint8_t m_batch_gap;

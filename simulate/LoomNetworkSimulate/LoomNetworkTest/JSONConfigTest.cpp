@@ -34,7 +34,6 @@ protected:
 		EXPECT_EQ(cfg.min_drift, truth.min_drift);
 		EXPECT_EQ(cfg.max_drift, truth.max_drift);
 		EXPECT_EQ(cfg.slot_length, truth.slot_length);
-		EXPECT_EQ(cfg, truth);
 	}
 
 	DynamicJsonDocument m_doc;

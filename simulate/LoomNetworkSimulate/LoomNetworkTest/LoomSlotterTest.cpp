@@ -9,7 +9,7 @@ TEST(Slotter, SlotsPerRefresh) {
 	// 2 cycles per refresh, 1 slot per gap
 	Slotter slotter(9, 24, 2, 1, 1); // generic end device
 
-	ASSERT_EQ(slotter.get_slots_per_refresh(), 55);
+	ASSERT_EQ(slotter.get_slots_per_refresh(), 54);
 }
 
 TEST(Slotter, EndDevice) {

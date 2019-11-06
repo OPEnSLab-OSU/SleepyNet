@@ -47,15 +47,15 @@ namespace LoomNet {
 		State get_state() const { return m_state; }
 		SendStatus get_last_sent_status() const { return m_last_send_status; }
 		PacketCtrl get_cur_packet_type() const { return m_cur_packet_type; }
-		uint16_t get_cur_send_addr() const { return m_cur_send_addr; }
+		uint16_t get_cur_send_addr() const { return m_cur_addr; }
 		TimeInterval get_refresh_period() const { return m_slot_length * m_slot.get_slots_per_refresh(); }
 		TimeInterval get_data_period() const { return m_slot_length * REFRESH_CYCLE_SLOTS; }
 		TimeInterval get_recv_timeout() const { return m_min_drift; }
 		TimeInterval wake_next_time() const;
 
-		DeviceType get_device_type() const { return m_self_type; }
 		SlotType& get_slotter() { return m_slot; }
 		const SlotType& get_slotter() const { return m_slot; }
+		uint16_t get_parent_addr() const { return m_parent_addr; }
 
 		void begin();
 		void send_event(const PacketCtrl type);
@@ -77,16 +77,14 @@ namespace LoomNet {
 		State m_state;
 		SendStatus m_last_send_status;
 		PacketCtrl m_cur_packet_type;
-		uint16_t m_cur_send_addr;
+		uint16_t m_cur_addr;
 
 		SlotType m_slot;
 		TimeInterval m_data_wait;
 		TimeInterval m_refresh_wait;
 		uint16_t m_slots_since_refresh;
 
-		const DeviceType m_self_type;
-		const uint16_t m_self_addr;
-		const uint8_t m_child_router_count;
+		const uint16_t m_parent_addr;
 		const TimeInterval m_slot_length;
 		const TimeInterval m_min_drift;
 		const TimeInterval m_max_drift;
@@ -98,14 +96,12 @@ namespace LoomNet {
 		: m_state(State::MAC_CLOSED)
 		, m_last_send_status(SendStatus::NONE)
 		, m_cur_packet_type(PacketCtrl::NONE)
-		, m_cur_send_addr(ADDR_NONE)
+		, m_cur_addr(ADDR_NONE)
 		, m_slot(config)
 		, m_data_wait(TIME_NONE)
 		, m_refresh_wait(TIME_NONE)
 		, m_slots_since_refresh(0)
-		, m_self_type(get_type(config.self_addr))
-		, m_self_addr(config.self_addr)
-		, m_child_router_count(config.child_router_count)
+		, m_parent_addr(get_parent(config.self_addr, get_type(config.self_addr)))
 		, m_slot_length(config.slot_length)
 		, m_min_drift(config.min_drift)
 		, m_max_drift(config.max_drift)
@@ -120,7 +116,8 @@ namespace LoomNet {
 		// and the minimum drift is used to correct each indivdual slot
 		// waiting for a refresh
 		if (state == Slotter::State::SLOT_WAIT_REFRESH) {
-			if (m_self_type == DeviceType::COORDINATOR)
+			// if we're a coordinator
+			if (m_parent_addr == ADDR_NONE)
 				return m_refresh_wait;
 			else
 				return m_refresh_wait - m_max_drift;
@@ -130,7 +127,7 @@ namespace LoomNet {
 		if (state == Slotter::State::SLOT_RECV_W_SYNC || state == Slotter::State::SLOT_SEND_W_SYNC)
 			next_wake = m_data_wait;
 		else
-			next_wake = m_slot_length * (m_slots_since_refresh + m_slot.get_slot_wait());
+			next_wake = m_data_wait + m_slot_length * (m_slots_since_refresh + m_slot.get_slot_wait());
 		// only correct for drift if recieving
 		if (state == Slotter::State::SLOT_RECV || state == Slotter::State::SLOT_RECV_W_SYNC)
 			return next_wake - m_min_drift;
@@ -144,12 +141,12 @@ namespace LoomNet {
 		m_slot.reset();
 		m_slots_since_refresh = 0;
 		m_cur_packet_type = PacketCtrl::REFRESH_INITIAL;
-		m_cur_send_addr = ADDR_COORD;
-
-		if (m_self_type == DeviceType::COORDINATOR) {
+		m_cur_addr = ADDR_COORD;
+		// if we're a coordinator
+		if (m_parent_addr == ADDR_NONE) {
 			// tell the network to send a refresh packet
 			m_state = State::MAC_SEND_REFRESH;
-			m_cur_send_addr = ADDR_NONE;
+			m_cur_addr = ADDR_NONE;
 		}
 		else
 			m_state = State::MAC_WAIT_REFRESH;
@@ -184,7 +181,7 @@ namespace LoomNet {
 		else {
 			if (cur_state == SlotState::SLOT_SEND || cur_state == SlotState::SLOT_SEND_W_SYNC) {
 				m_state = State::MAC_SEND_RDY;
-				m_cur_send_addr = get_parent(m_self_addr, m_self_type);
+				m_cur_addr = m_parent_addr;
 			}
 			else if (cur_state == SlotState::SLOT_RECV || cur_state == SlotState::SLOT_RECV_W_SYNC)
 				m_state = State::MAC_RECV_RDY;
@@ -204,7 +201,7 @@ namespace LoomNet {
 			return m_halt_error(State::MAC_SEND_RDY);
 		// based on the current packet type, wait for a new packet type or sleep
 		if (type == PacketCtrl::DATA_TRANS || type == PacketCtrl::DATA_ACK_W_DATA) {
-			if (m_cur_packet_type != PacketCtrl::DATA_ACK || m_cur_packet_type != PacketCtrl::DATA_ACK_W_DATA)
+			if (m_cur_packet_type != PacketCtrl::DATA_TRANS && m_cur_packet_type != PacketCtrl::DATA_ACK_W_DATA)
 				m_halt_error(Error::MAC_INVALID_SEND_PACKET);
 			// ready to recieve an acknowledgement!
 			m_state = State::MAC_RECV_RDY;
@@ -227,31 +224,37 @@ namespace LoomNet {
 			return m_halt_error(State::MAC_RECV_RDY);
 		// check for an invalid packet type
 		// if the packet type is not what we expected, BUT we allow an ACK when we expect a DATA_ACK
-		if (type != m_cur_packet_type
-			&& (m_cur_packet_type != PacketCtrl::DATA_ACK_W_DATA && type != PacketCtrl::DATA_ACK)) {
+		// OR we recieved an ACK from an address we did not expect
+		if (	(type != m_cur_packet_type
+				&& !(m_cur_packet_type == PacketCtrl::DATA_ACK_W_DATA 
+					&& type == PacketCtrl::DATA_ACK))
+			|| ((m_cur_packet_type == PacketCtrl::DATA_ACK 
+					|| m_cur_packet_type == PacketCtrl::DATA_ACK_W_DATA)
+				&& m_cur_addr != addr)) {
 			// we were waiting for something but got something else
-			m_last_send_status = SendStatus::MAC_SEND_WRONG_RESPONSE;
+			if (m_cur_packet_type == PacketCtrl::DATA_ACK 
+				|| m_cur_packet_type == PacketCtrl::DATA_ACK_W_DATA)
+				m_last_send_status = SendStatus::MAC_SEND_WRONG_RESPONSE;
 			m_state = State::MAC_SLEEP_RDY;
+			return;
 		}
 		// packet type is valid!
 		// based on the packet type recieved, send a new packet type or sleep
-		else if (type == PacketCtrl::DATA_TRANS || type == PacketCtrl::DATA_ACK_W_DATA) {
+		if (type == PacketCtrl::DATA_TRANS || type == PacketCtrl::DATA_ACK_W_DATA) {
 			// send an ACK packet, but choose type based on the type
-			if (type == PacketCtrl::DATA_TRANS)
-				m_cur_packet_type = PacketCtrl::DATA_ACK_W_DATA;
-			else {
-				// we got an ACK as well, so send was good!
-				m_last_send_status = SendStatus::MAC_SEND_SUCCESSFUL;
-				m_cur_packet_type = PacketCtrl::DATA_ACK;
-			}
-			m_cur_send_addr = addr;
+			m_cur_addr = addr;
 			m_state = State::MAC_SEND_RDY;
 		}
-		// else it must be an ACK packet, so the send was good and go to sleep
-		else {
-			m_last_send_status = SendStatus::MAC_SEND_SUCCESSFUL;
+		else
 			m_state = State::MAC_SLEEP_RDY;
-		}
+		// chose a packet type based on the packet recieves
+		if (type == PacketCtrl::DATA_TRANS)
+			m_cur_packet_type = PacketCtrl::DATA_ACK_W_DATA;
+		else if (type == PacketCtrl::DATA_ACK_W_DATA)
+			m_cur_packet_type = PacketCtrl::DATA_ACK;
+		// if it was an ACK packet, set the last sent status approprietly
+		if (type == PacketCtrl::DATA_ACK_W_DATA || type == PacketCtrl::DATA_ACK)
+			m_last_send_status = SendStatus::MAC_SEND_SUCCESSFUL;
 	}
 
 	template <class T, class E>

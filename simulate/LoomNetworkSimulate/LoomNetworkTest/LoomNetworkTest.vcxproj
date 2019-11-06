@@ -36,6 +36,7 @@
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(SolutionDir)libraries\ArduinoJson\src;$(SolutionDir)libraries\FastCRC\src;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemGroup>
+    <ClInclude Include="LoomMACStateFixture.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>

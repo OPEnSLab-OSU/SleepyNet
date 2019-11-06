@@ -42,6 +42,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
+    <ClInclude Include="LoomMACStateFixture.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Sources">

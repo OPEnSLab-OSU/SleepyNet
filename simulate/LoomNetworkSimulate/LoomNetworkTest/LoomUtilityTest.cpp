@@ -31,7 +31,7 @@ TEST(Utility, GetType) {
 
 TEST(Utility, GetParent) {
 	// test coordinator
-	EXPECT_EQ(get_parent(ADDR_COORD, DeviceType::COORDINATOR), ADDR_ERROR);
+	EXPECT_EQ(get_parent(ADDR_COORD, DeviceType::COORDINATOR), ADDR_NONE);
 	// test none, error
 	EXPECT_EQ(get_parent(ADDR_NONE, DeviceType::ERROR), ADDR_ERROR);
 	EXPECT_EQ(get_parent(ADDR_ERROR, DeviceType::ERROR), ADDR_ERROR);

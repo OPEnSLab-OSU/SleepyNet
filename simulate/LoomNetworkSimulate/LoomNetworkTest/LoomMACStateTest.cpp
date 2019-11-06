@@ -1,148 +1,6 @@
-#include "pch.h"
-#include <utility>
-#include "gmock/gmock.h"
-#include "../../../src/LoomMACState.h"
+#include "LoomMACStateFixture.h"
 
-using namespace LoomNet;
-using ::testing::Sequence;
-using ::testing::Return;
-using ::testing::ReturnPointee;
-using ::testing::StrictMock;
-using ::testing::NaggyMock;
-using ::testing::AnyNumber;
-using ::testing::AtLeast;
-using ::testing::Eq;
-
-class MockSlotter {
-public:
-	MockSlotter(const NetworkConfig& config) {}
-
-	MOCK_METHOD(Slotter::State, get_state, (), (const));
-	MOCK_METHOD(Slotter::State, next_state, ());
-	MOCK_METHOD(uint8_t, get_slot_wait, (), (const));
-	MOCK_METHOD(uint16_t, get_slots_per_refresh, (), (const));
-	MOCK_METHOD(void, reset, ());
-
-	void start(std::pair<Sequence, Sequence>& seq) const {
-		// and make sure it is reset at least once
-		EXPECT_CALL(*this, reset)
-			.Times(1)
-			.InSequence(seq.first, seq.second)
-			.RetiresOnSaturation();
-		// set the first slotter state to wait refresh
-		EXPECT_CALL(*this, get_state)
-			.Times(AnyNumber())
-			.InSequence(seq.first, seq.second)
-			.WillRepeatedly(Return(Slotter::State::SLOT_WAIT_REFRESH));
-	}
-
-	void set_next_state(const Slotter::State next_state, const uint8_t wait, std::pair<Sequence, Sequence>& seq) const {
-		// next_state call
-		EXPECT_CALL(*this, next_state)
-			.Times(1)
-			.InSequence(seq.first, seq.second)
-			.WillOnce(Return(next_state))
-			.RetiresOnSaturation();
-		// get_state and get_slot_wait calls after
-		EXPECT_CALL(*this, get_state)
-			.Times(AnyNumber())
-			.InSequence(seq.first)
-			.WillRepeatedly(Return(next_state));
-		EXPECT_CALL(*this, get_slot_wait)
-			.Times(AnyNumber())
-			.InSequence(seq.second)
-			.WillRepeatedly(Return(wait));
-	}
-};
-
-// setup some utility functions to test a sequence of state transitions
-// in the MAC layer
-class MACStateFixture : public ::testing::TestWithParam<const NetworkConfig*> {
-public:
-	static const NetworkConfig config_end;
-	static const NetworkConfig config_router1;
-	static const NetworkConfig config_router2;
-	static const NetworkConfig config_coord;
-
-protected:
-	void SetUp() override {}
-	void TearDown() override {}
-
-	class ErrorType {
-	public:
-		void operator()(uint8_t error, uint8_t expectect_state) const {
-			ADD_FAILURE() << "Got error " << error << " and state " << expectect_state << " from the MAC";
-		}
-	};
-
-	using MAC = MACState<StrictMock<MockSlotter>, ErrorType>;
-	using State = MAC::State;
-
-	void start(MAC& mac, const NetworkConfig& config) {
-		// check the initial state of the MACState
-		EXPECT_EQ(mac.get_state(), State::MAC_CLOSED);
-		EXPECT_NE(mac.get_device_type(), DeviceType::ERROR);
-		// start er up
-		mac.begin();
-		// start the MAC
-		// check that the start state is correct
-		if (mac.get_device_type() == DeviceType::COORDINATOR)
-			EXPECT_EQ(mac.get_state(), State::MAC_SEND_REFRESH);
-		else
-			EXPECT_EQ(mac.get_state(), State::MAC_WAIT_REFRESH);
-		// trigger a refresh
-		m_data_sync = config.slot_length * 5;
-		m_refresh_sync = config.slot_length * 100;
-		m_now = TimeInterval(TimeInterval::SECOND, 500);
-		mac.refresh_event(m_now, m_data_sync, m_refresh_sync);
-		// check the state
-		EXPECT_EQ(mac.get_state(), State::MAC_SLEEP_RDY);
-		// verify the sleep time is correct
-		// if we're an end device we only ever sent
-		if (get_type(config.self_addr) == DeviceType::END_DEVICE)
-			EXPECT_EQ(mac.wake_next_time(), m_now + m_data_sync);
-		else
-			EXPECT_EQ(mac.wake_next_time(), m_now + m_data_sync - config.min_drift);
-	}
-
-	TimeInterval m_now = TimeInterval(TIME_NONE);
-	TimeInterval m_data_sync = TimeInterval(TIME_NONE);
-	TimeInterval m_refresh_sync = TimeInterval(TIME_NONE);
-};
-
-const NetworkConfig MACStateFixture::config_coord = {
-	SLOT_NONE, 24, 2, 1, 1, 0, 13, 11,
-	ADDR_COORD, 3, 1,
-	TimeInterval(TimeInterval::SECOND, 3),
-	TimeInterval(TimeInterval::SECOND, 10),
-	TimeInterval(TimeInterval::SECOND, 10)
-};
-
-const NetworkConfig MACStateFixture::config_router1 = {
-	13, 24, 2, 1, 1, 7, 4, 7,
-	0x1000, 2, 3,
-	TimeInterval(TimeInterval::SECOND, 3),
-	TimeInterval(TimeInterval::SECOND, 10),
-	TimeInterval(TimeInterval::SECOND, 10)
-};
-
-const NetworkConfig MACStateFixture::config_router2 = {
-	5, 24, 2, 1, 1, 3, 1, 2,
-	0x1200, 0, 2,
-	TimeInterval(TimeInterval::SECOND, 3),
-	TimeInterval(TimeInterval::SECOND, 10),
-	TimeInterval(TimeInterval::SECOND, 10)
-};
-
-const NetworkConfig MACStateFixture::config_end = {
-	1, 24, 2, 1, 1, 1, SLOT_NONE, 0,
-	0x1201, 0, 0,
-	TimeInterval(TimeInterval::SECOND, 3),
-	TimeInterval(TimeInterval::SECOND, 10),
-	TimeInterval(TimeInterval::SECOND, 10)
-};
-
-TEST_P(MACStateFixture, RefreshCoord) {
+TEST_P(MACStateFixture, StartToRefresh) {
 	const NetworkConfig& config = *GetParam();
 	MAC test_mac(config);
 	const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
@@ -156,6 +14,433 @@ TEST_P(MACStateFixture, RefreshCoord) {
 		slot.set_next_state(Slotter::State::SLOT_RECV_W_SYNC, 5, seq);
 	// with those expectations, start the MAC!
 	start(test_mac, config);
+	// verify the sleep time is correct
+	// if we're an end device we only ever sent
+	if (get_type(config.self_addr) == DeviceType::END_DEVICE)
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync);
+	else
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync - config.min_drift);
+}
+
+TEST_P(MACStateFixture, RecvSuccessFull) {
+	const NetworkConfig& config = *GetParam();
+	MAC test_mac(config);
+	const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+	std::pair<Sequence, Sequence> seq;
+	// set the slotters start expectations
+	slot.start(seq);
+	// and set the next state to what it would actually be
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	// with those expectations, start the MAC!
+	start(test_mac, config);
+	// verify the sleep time
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5 - config.min_drift);
+	// wake the MAC
+	test_mac.wake_event();
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+	// recieve the packet!
+	test_mac.recv_event(PacketCtrl::DATA_TRANS, 0x0001);
+	// test the state, current packet type, and sending address
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK_W_DATA);
+	EXPECT_EQ(test_mac.get_cur_send_addr(), 0x0001);
+	// send a data with ack packet
+	test_mac.send_event(PacketCtrl::DATA_ACK_W_DATA);
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK);
+	// recive the packet
+	test_mac.recv_event(PacketCtrl::DATA_ACK, 0x0001);
+	// and that's a full transaction!
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+	EXPECT_EQ(test_mac.get_last_sent_status(), MAC::SendStatus::MAC_SEND_SUCCESSFUL);
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10 - config.min_drift);
+}
+
+TEST_P(MACStateFixture, RecvSuccessPartial) {
+	const NetworkConfig& config = *GetParam();
+	MAC test_mac(config);
+	const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+	std::pair<Sequence, Sequence> seq;
+	// set the slotters start expectations
+	slot.start(seq);
+	// and set the next state to what it would actually be
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	// with those expectations, start the MAC!
+	start(test_mac, config);
+	// verify the sleep time
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5 - config.min_drift);
+	// wake the MAC
+	test_mac.wake_event();
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+	// recieve the packet!
+	test_mac.recv_event(PacketCtrl::DATA_TRANS, 0x0001);
+	// test the state, current packet type, and sending address
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK_W_DATA);
+	EXPECT_EQ(test_mac.get_cur_send_addr(), 0x0001);
+	// send a data with ack packet
+	test_mac.send_event(PacketCtrl::DATA_ACK);
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10 - config.min_drift);
+}
+
+TEST_P(MACStateFixture, RecvFailFull) {
+	const NetworkConfig& config = *GetParam();
+	MAC test_mac(config);
+	const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+	std::pair<Sequence, Sequence> seq;
+	// set the slotters start expectations
+	slot.start(seq);
+	// and set the next state to what it would actually be
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	// with those expectations, start the MAC!
+	start(test_mac, config);
+	// verify the sleep time
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5 - config.min_drift);
+	// wake the MAC
+	test_mac.wake_event();
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+	// recieve the packet!
+	test_mac.recv_event(PacketCtrl::DATA_TRANS, 0x0001);
+	// test the state, current packet type, and sending address
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK_W_DATA);
+	EXPECT_EQ(test_mac.get_cur_send_addr(), 0x0001);
+	// send a data with ack packet
+	test_mac.send_event(PacketCtrl::DATA_ACK_W_DATA);
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK);
+	// fail to recive the packet
+	test_mac.recv_fail();
+	// and that's a full transaction!
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+	EXPECT_EQ(test_mac.get_last_sent_status(), MAC::SendStatus::MAC_SEND_NO_ACK);
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10 - config.min_drift);
+}
+
+TEST_P(MACStateFixture, RecvFailPartial) {
+	const NetworkConfig& config = *GetParam();
+	MAC test_mac(config);
+	const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+	std::pair<Sequence, Sequence> seq;
+	// set the slotters start expectations
+	slot.start(seq);
+	// and set the next state to what it would actually be
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	// with those expectations, start the MAC!
+	start(test_mac, config);
+	// verify the sleep time
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5 - config.min_drift);
+	// wake the MAC
+	test_mac.wake_event();
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+	// recieve the packet!
+	test_mac.recv_fail();
+	// test the state, current packet type, and sending address
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10 - config.min_drift);
+}
+
+TEST_P(MACStateFixture, RecvWrongAddressFull) {
+	const NetworkConfig& config = *GetParam();
+	MAC test_mac(config);
+	const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+	std::pair<Sequence, Sequence> seq;
+	// set the slotters start expectations
+	slot.start(seq);
+	// and set the next state to what it would actually be
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	// with those expectations, start the MAC!
+	start(test_mac, config);
+	// verify the sleep time
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5 - config.min_drift);
+	// wake the MAC
+	test_mac.wake_event();
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+	// recieve the packet!
+	test_mac.recv_event(PacketCtrl::DATA_TRANS, 0x0001);
+	// test the state, current packet type, and sending address
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK_W_DATA);
+	EXPECT_EQ(test_mac.get_cur_send_addr(), 0x0001);
+	// send a data with ack packet
+	test_mac.send_event(PacketCtrl::DATA_ACK_W_DATA);
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK);
+	// fail to recive the packet
+	test_mac.recv_event(PacketCtrl::DATA_ACK, 0x0002);
+	// and that's a full transaction!
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+	EXPECT_EQ(test_mac.get_last_sent_status(), MAC::SendStatus::MAC_SEND_WRONG_RESPONSE);
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10 - config.min_drift);
+}
+
+TEST_P(MACStateFixture, RecvWrongTypeFull) {
+	const NetworkConfig& config = *GetParam();
+	MAC test_mac(config);
+	const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+	std::pair<Sequence, Sequence> seq;
+	// set the slotters start expectations
+	slot.start(seq);
+	// and set the next state to what it would actually be
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	// with those expectations, start the MAC!
+	start(test_mac, config);
+	// verify the sleep time
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5 - config.min_drift);
+	// wake the MAC
+	test_mac.wake_event();
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+	// recieve the packet!
+	test_mac.recv_event(PacketCtrl::DATA_TRANS, 0x0001);
+	// test the state, current packet type, and sending address
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK_W_DATA);
+	EXPECT_EQ(test_mac.get_cur_send_addr(), 0x0001);
+	// send a data with ack packet
+	test_mac.send_event(PacketCtrl::DATA_ACK_W_DATA);
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK);
+	// fail to recive the packet
+	test_mac.recv_event(PacketCtrl::DATA_TRANS, 0x0001);
+	// and that's a full transaction!
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+	EXPECT_EQ(test_mac.get_last_sent_status(), MAC::SendStatus::MAC_SEND_WRONG_RESPONSE);
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10 - config.min_drift);
+}
+
+TEST_P(MACStateFixture, RecvWrongTypePartial) {
+	const NetworkConfig& config = *GetParam();
+	MAC test_mac(config);
+	const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+	std::pair<Sequence, Sequence> seq;
+	// set the slotters start expectations
+	slot.start(seq);
+	// and set the next state to what it would actually be
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	slot.set_next_state(Slotter::State::SLOT_RECV, 5, seq);
+	// with those expectations, start the MAC!
+	start(test_mac, config);
+	// verify the sleep time
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5 - config.min_drift);
+	// wake the MAC
+	test_mac.wake_event();
+	// check the state and current packet type
+	EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+	EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+	// recieve the packet!
+	test_mac.recv_event(PacketCtrl::DATA_ACK, 0x0001);
+	// test the state, current packet type, and sending address
+	EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+	EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10 - config.min_drift);
+}
+
+TEST_P(MACStateFixture, SendSuccessFull) {
+	const NetworkConfig& config = *GetParam();
+	// we can't run this test for a coordinator
+	if (config.self_addr != ADDR_COORD) {
+		MAC test_mac(config);
+		const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+		std::pair<Sequence, Sequence> seq;
+		// set the slotters start expectations
+		slot.start(seq);
+		// and set the next state to what it would actually be
+		slot.set_next_state(Slotter::State::SLOT_SEND, 5, seq);
+		slot.set_next_state(Slotter::State::SLOT_SEND, 5, seq);
+		// with those expectations, start the MAC!
+		start(test_mac, config);
+		// verify the sleep time
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5);
+		// wake the MAC
+		test_mac.wake_event();
+		// check the state and current packet type
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+		EXPECT_EQ(test_mac.get_cur_send_addr(), test_mac.get_parent_addr());
+		// send the packet!
+		test_mac.send_event(PacketCtrl::DATA_TRANS);
+		// test the state, current packet type, and sending address
+		EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK_W_DATA);
+		// recieve the packet!
+		test_mac.recv_event(PacketCtrl::DATA_ACK_W_DATA, test_mac.get_parent_addr());
+		// check the state and current packet type
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK);
+		EXPECT_EQ(test_mac.get_cur_send_addr(), test_mac.get_parent_addr());
+		// recive the packet
+		test_mac.send_event(PacketCtrl::DATA_ACK);
+		// and that's a full transaction!
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+		EXPECT_EQ(test_mac.get_last_sent_status(), MAC::SendStatus::MAC_SEND_SUCCESSFUL);
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10);
+	}
+}
+
+TEST_P(MACStateFixture, SendSuccessPartial) {
+	const NetworkConfig& config = *GetParam();
+	// we can't run this test for a coordinator
+	if (config.self_addr != ADDR_COORD) {
+		MAC test_mac(config);
+		const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+		std::pair<Sequence, Sequence> seq;
+		// set the slotters start expectations
+		slot.start(seq);
+		// and set the next state to what it would actually be
+		slot.set_next_state(Slotter::State::SLOT_SEND, 5, seq);
+		slot.set_next_state(Slotter::State::SLOT_SEND, 5, seq);
+		// with those expectations, start the MAC!
+		start(test_mac, config);
+		// verify the sleep time
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5);
+		// wake the MAC
+		test_mac.wake_event();
+		// check the state and current packet type
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+		EXPECT_EQ(test_mac.get_cur_send_addr(), test_mac.get_parent_addr());
+		// send the packet!
+		test_mac.send_event(PacketCtrl::DATA_TRANS);
+		// test the state, current packet type, and sending address
+		EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK_W_DATA);
+		// recieve the packet!
+		test_mac.recv_event(PacketCtrl::DATA_ACK, test_mac.get_parent_addr());
+		// and that's a full transaction!
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+		EXPECT_EQ(test_mac.get_last_sent_status(), MAC::SendStatus::MAC_SEND_SUCCESSFUL);
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10);
+	}
+}
+
+TEST_P(MACStateFixture, SendFail) {
+	const NetworkConfig& config = *GetParam();
+	// we can't run this test for a coordinator
+	if (config.self_addr != ADDR_COORD) {
+		MAC test_mac(config);
+		const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+		std::pair<Sequence, Sequence> seq;
+		// set the slotters start expectations
+		slot.start(seq);
+		// and set the next state to what it would actually be
+		slot.set_next_state(Slotter::State::SLOT_SEND, 5, seq);
+		slot.set_next_state(Slotter::State::SLOT_SEND, 5, seq);
+		// with those expectations, start the MAC!
+		start(test_mac, config);
+		// verify the sleep time
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5);
+		// wake the MAC
+		test_mac.wake_event();
+		// check the state and current packet type
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+		EXPECT_EQ(test_mac.get_cur_send_addr(), test_mac.get_parent_addr());
+		// send the packet!
+		test_mac.send_event(PacketCtrl::DATA_TRANS);
+		// test the state, current packet type, and sending address
+		EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK_W_DATA);
+		// recieve the packet!
+		test_mac.recv_fail();
+		// and that's a full transaction!
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+		EXPECT_EQ(test_mac.get_last_sent_status(), MAC::SendStatus::MAC_SEND_NO_ACK);
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10);
+	}
+}
+
+TEST_P(MACStateFixture, SendWrongType) {
+	const NetworkConfig& config = *GetParam();
+	// we can't run this test for a coordinator
+	if (config.self_addr != ADDR_COORD) {
+		MAC test_mac(config);
+		const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+		std::pair<Sequence, Sequence> seq;
+		// set the slotters start expectations
+		slot.start(seq);
+		// and set the next state to what it would actually be
+		slot.set_next_state(Slotter::State::SLOT_SEND, 5, seq);
+		slot.set_next_state(Slotter::State::SLOT_SEND, 5, seq);
+		// with those expectations, start the MAC!
+		start(test_mac, config);
+		// verify the sleep time
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5);
+		// wake the MAC
+		test_mac.wake_event();
+		// check the state and current packet type
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+		EXPECT_EQ(test_mac.get_cur_send_addr(), test_mac.get_parent_addr());
+		// send the packet!
+		test_mac.send_event(PacketCtrl::DATA_TRANS);
+		// test the state, current packet type, and sending address
+		EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK_W_DATA);
+		// recieve the packet!
+		test_mac.recv_event(PacketCtrl::DATA_TRANS, test_mac.get_parent_addr());
+		// and that's a full transaction!
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+		EXPECT_EQ(test_mac.get_last_sent_status(), MAC::SendStatus::MAC_SEND_WRONG_RESPONSE);
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10);
+	}
+}
+
+TEST_P(MACStateFixture, SendWrongAddr) {
+	const NetworkConfig& config = *GetParam();
+	// we can't run this test for a coordinator
+	if (config.self_addr != ADDR_COORD) {
+		MAC test_mac(config);
+		const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+		std::pair<Sequence, Sequence> seq;
+		// set the slotters start expectations
+		slot.start(seq);
+		// and set the next state to what it would actually be
+		slot.set_next_state(Slotter::State::SLOT_SEND, 5, seq);
+		slot.set_next_state(Slotter::State::SLOT_SEND, 5, seq);
+		// with those expectations, start the MAC!
+		start(test_mac, config);
+		// verify the sleep time
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 5);
+		// wake the MAC
+		test_mac.wake_event();
+		// check the state and current packet type
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_TRANS);
+		EXPECT_EQ(test_mac.get_cur_send_addr(), test_mac.get_parent_addr());
+		// send the packet!
+		test_mac.send_event(PacketCtrl::DATA_TRANS);
+		// test the state, current packet type, and sending address
+		EXPECT_EQ(test_mac.get_state(), State::MAC_RECV_RDY);
+		EXPECT_EQ(test_mac.get_cur_packet_type(), PacketCtrl::DATA_ACK_W_DATA);
+		// recieve the packet!
+		test_mac.recv_event(PacketCtrl::DATA_ACK, 0x0001);
+		// and that's a full transaction!
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SLEEP_RDY);
+		EXPECT_EQ(test_mac.get_last_sent_status(), MAC::SendStatus::MAC_SEND_WRONG_RESPONSE);
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync + config.slot_length * 10);
+	}
 }
 
 INSTANTIATE_TEST_SUITE_P(RefreshState, MACStateFixture,

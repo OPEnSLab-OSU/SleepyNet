@@ -32,5 +32,5 @@ uint16_t LoomNet::get_parent(const uint16_t addr, const DeviceType type) {
 	// parent of first router is always coordinator
 	if (type == DeviceType::FIRST_ROUTER) return ADDR_COORD;
 	// huh
-	return ADDR_ERROR;
+	return ADDR_NONE;
 }

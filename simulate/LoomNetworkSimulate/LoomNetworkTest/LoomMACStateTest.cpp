@@ -22,6 +22,35 @@ TEST_P(MACStateFixture, StartToRefresh) {
 		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_data_sync - config.min_drift);
 }
 
+TEST_P(MACStateFixture, RefreshToRefresh) {
+	const NetworkConfig& config = *GetParam();
+	MAC test_mac(config);
+	const StrictMock<MockSlotter>& slot = test_mac.get_slotter();
+	std::pair<Sequence, Sequence> seq;
+	// set the slotters start expectations
+	slot.start(seq);
+	// set the next state to refresh
+	slot.set_next_state(Slotter::State::SLOT_WAIT_REFRESH, 0, seq);
+	// and set start expectations again, since the slotter will be reset
+	slot.start(seq);
+	// with those expectations, start the MAC!
+	start(test_mac, config);
+	// verify the sleep time is correct
+	// if we're an end device we only ever sent
+	if (get_type(config.self_addr) == DeviceType::COORDINATOR)
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_refresh_sync);
+	else
+		EXPECT_EQ(test_mac.wake_next_time(), m_now + m_refresh_sync - config.max_drift);
+	// wake the MAC
+	test_mac.wake_event();
+	// check the state
+	if (get_type(config.self_addr) == DeviceType::COORDINATOR)
+		EXPECT_EQ(test_mac.get_state(), State::MAC_SEND_REFRESH);
+	else
+		EXPECT_EQ(test_mac.get_state(), State::MAC_WAIT_REFRESH);
+
+}
+
 TEST_P(MACStateFixture, RecvSuccessFull) {
 	const NetworkConfig& config = *GetParam();
 	MAC test_mac(config);

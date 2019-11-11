@@ -179,6 +179,7 @@
     <ClInclude Include="..\..\..\src\LoomNetworkConfig.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkPacket.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkTime.h" />
+    <ClInclude Include="..\..\..\src\LoomPacketSorter.h" />
     <ClInclude Include="..\..\..\src\LoomRadio.h" />
     <ClInclude Include="..\..\..\src\LoomRouter.h" />
     <ClInclude Include="..\..\..\src\LoomNetworkUtility.h" />

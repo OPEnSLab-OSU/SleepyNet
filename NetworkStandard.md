@@ -108,7 +108,7 @@ Where:
 * **Frame Length**: The size of the network packet in bytes (Frame Length + Destination + Source + Reserved + Payload). Unsigned byte, can be no more than 255.
 * **Destination**: The 16-bit address of the final destination.
 * **Source**: The 16-bit address of the original source (not to be confused with the current source, which is handled in the MAC layer).
-* **Sequence**: The number of packets remaining in a sequence of fragments, indexed from zero (ex. A two fragment sequence would have sequence numbers 1 and then 0).
+* **Sequence**: The number of packets remaining in a sequence of fragments, indexed from zero (ex. A two fragment sequence would have sequence numbers 1 and then 0). 
 * **Rolling ID**: To prevent packet duplication, the this field combined with the source address shall correspond to a unique packet on the network. This field may be sequential or randomly generated, but must be unique for the lifetime of the packet.
 * **Reserved**: Discard.
 * **Payload**: A sequence of data bytes (no larger than 246 bytes long).
@@ -262,7 +262,7 @@ A radio being used by the Loom Network Stack shall be capable of:
 It is assumed that power consumption is transmission > receiving > detecting activity.
 
 A radio shall transition from the following states:
-```C++
+```
                                                       (Radio ON)
 +----------+  Enable    +-------+    Wake    +------+ Send/Recv
 |          |----------->|       |----------->|      |----------+

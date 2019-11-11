@@ -177,7 +177,6 @@ namespace LoomNet {
 		// if refresh, begin the MAC anew
 		if (cur_state == SlotState::SLOT_WAIT_REFRESH)
 			begin();
-		// else we must be transmitting or recieving data
 		else {
 			if (cur_state == SlotState::SLOT_SEND || cur_state == SlotState::SLOT_SEND_W_SYNC) {
 				m_state = State::MAC_SEND_RDY;
@@ -190,9 +189,9 @@ namespace LoomNet {
 			else m_halt_error(Error::MAC_INVALID_SLOTTER_STATE);
 			// data time!
 			m_cur_packet_type = PacketCtrl::DATA_TRANS;
+			// move the slotter forward
+			m_slot.next_state();
 		}
-		// move the slotter forward
-		m_slot.next_state();
 	}
 
 	template <class T, class E>

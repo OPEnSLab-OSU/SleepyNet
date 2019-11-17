@@ -12,7 +12,7 @@
 
 class DoNothing {
 public:
-	constexpr void operator()(uint8_t error, uint8_t expectect_state) const {};
+	void operator()(uint8_t error, uint8_t expected_state) const {};
 };
 
 namespace LoomNet {

@@ -199,10 +199,3 @@ Cons:
 * Retransmissions or additional protocols are standard (does not optimize for transmission).
 * Node behavior can be unpredictable for short time samples
 * 
-
-
-### Web Connectivity
-
-* Connection based
-* Addressed using DNS/IPv4
-* 

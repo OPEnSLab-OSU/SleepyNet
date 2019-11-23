@@ -10,4 +10,4 @@ SleepyNet is an IoT networking stack designed to be low-footprint, low-power, an
  * Operate according to [this standard](./NetworkStandard.md).
 SleepyNet fills the gap between hobbyist radio transmission libraries that don't offer features such as power management and radio portability (e.g. RadioHead), and enterprise-grade networking platforms with steep learning curves (e.g. OpenThread, emb6).
 
-This page will be updated as the project progresses, however from now you can check out an outline of the network we intend to create [here](./NetworkStandard.md).
+This page will be updated as the project progresses, however for now you can check out an outline of the network we intend to create [here](./NetworkStandard.md).

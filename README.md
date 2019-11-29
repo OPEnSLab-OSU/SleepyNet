@@ -1,6 +1,6 @@
 # SleepyNet
 
-[![Build Status](https://travis-ci.org/OPEnSLab-OSU/Loom-Network.svg?branch=master)](https://travis-ci.org/OPEnSLab-OSU/Loom-Network)
+[![Build Status](https://travis-ci.org/OPEnSLab-OSU/SleepyNet.svg?branch=master)](https://travis-ci.org/OPEnSLab-OSU/SleepyNet)
 
 SleepyNet is an IoT networking stack designed to be low-footprint, low-power, and intuitive. In other words, SleepyNet makes it easy to periodically send data from wireless devices to a central hub. Networks in SleepyNet:
  * Use a tree structure.

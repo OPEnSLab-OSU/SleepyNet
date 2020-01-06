@@ -1,21 +1,9 @@
 #pragma once
 #include <stdint.h>
 #include <stdlib.h>
+#include "LoomNetworkUtility.h"
 
 namespace LoomNet {
-	template<class T>
-	class TwoThings {
-	public:
-		TwoThings(const T& one, const T& two)
-			: m_things{ one, two } {}
-
-		const T& operator[](const size_t index) const { return m_things[index]; }
-		T& operator[](const size_t index) { return m_things[index]; }
-
-	private:
-		T m_things[2];
-	};
-
 	class TimeInterval {
 	public:
 		enum Unit : uint8_t {
@@ -28,7 +16,7 @@ namespace LoomNet {
 			NONE = 6,
 		};
 
-		using TwoTimes = TwoThings<TimeInterval>;
+		using TwoTimes = Pair<TimeInterval, TimeInterval>;
 
 		TimeInterval(const Unit unit, const uint32_t time)
 			: m_unit(unit)
@@ -56,26 +44,26 @@ namespace LoomNet {
 
 		bool operator<(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
-			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return false;
-			return times[0].get_time() < times[1].get_time();
+			if (times.first().get_unit() == Unit::NONE || times.second().get_unit() == Unit::NONE) return false;
+			return times.first().get_time() < times.second().get_time();
 		}
 
 		bool operator>(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
-			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return false;
-			return times[0].get_time() > times[1].get_time();
+			if (times.first().get_unit() == Unit::NONE || times.second().get_unit() == Unit::NONE) return false;
+			return times.first().get_time() > times.second().get_time();
 		}
 
 		bool operator<=(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
-			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return false;
-			return times[0].get_time() <= times[1].get_time();
+			if (times.first().get_unit() == Unit::NONE || times.second().get_unit() == Unit::NONE) return false;
+			return times.first().get_time() <= times.second().get_time();
 		}
 
 		bool operator>=(const TimeInterval& rhs) const {
 			const TwoTimes& times = m_match_time(rhs);
-			if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return false;
-			return times[0].get_time() >= times[1].get_time();
+			if (times.first().get_unit() == Unit::NONE || times.second().get_unit() == Unit::NONE) return false;
+			return times.first().get_time() >= times.second().get_time();
 		}
 
 		Unit get_unit() const { return m_unit; }

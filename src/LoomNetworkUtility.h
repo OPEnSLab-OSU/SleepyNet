@@ -7,6 +7,23 @@
  */
 
 namespace LoomNet {
+	template<class T1, class T2>
+	class Pair {
+	public:
+		Pair(const T1& one, const T2& two)
+			: m_first{ one }
+			, m_second{ two } {}
+
+		const T1& first() const { return m_first; }
+		T1& first() { return m_first; }
+		const T1& second() const { return m_second; }
+		T1& second() { return m_second; }
+
+	private:
+		T1 m_first;
+		T2 m_second;
+	};
+	
 	constexpr uint16_t ADDR_NONE = 0;
 	constexpr uint16_t ADDR_COORD = 0xF000;
 	constexpr uint16_t ADDR_ERROR = 0xFFFF;

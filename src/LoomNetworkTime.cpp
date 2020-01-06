@@ -4,32 +4,35 @@ using namespace LoomNet;
 
 const TimeInterval TimeInterval::operator+(const TimeInterval& rhs) const {
 	const TwoTimes& times = m_match_time(rhs);
-	if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) return TimeInterval{ Unit::NONE, 0 };
-	const uint64_t res = static_cast<uint64_t>(times[0].get_time()) + static_cast<uint64_t>(times[1].get_time());
-	if (res > UINT32_MAX) return TimeInterval{ Unit::NONE, 0 };
-	return { times[0].get_unit(), times[0].get_time() + times[1].get_time() };
+	if (times.first().get_unit() == Unit::NONE || times.second().get_unit() == Unit::NONE) 
+		return TimeInterval{ Unit::NONE, 0 };
+	const uint64_t res = static_cast<uint64_t>(times.first().get_time()) + static_cast<uint64_t>(times.second().get_time());
+	if (res > UINT32_MAX) 
+		return TimeInterval{ Unit::NONE, 0 };
+	return { times.first().get_unit(), times.first().get_time() + times.second().get_time() };
 }
 
 const TimeInterval TimeInterval::operator-(const TimeInterval& rhs) const {
 	const TwoTimes& times = m_match_time(rhs);
-	return  times[0].get_time() > times[1].get_time()
-		? TimeInterval{ times[0].get_unit(), times[0].get_time() - times[1].get_time() }
+	return  times.first().get_time() > times.second().get_time()
+		? TimeInterval{ times.first().get_unit(), times.first().get_time() - times.second().get_time() }
 	: TimeInterval{ Unit::NONE, 0 };
 }
 
 bool TimeInterval::operator==(const TimeInterval& rhs) const {
 	const TwoTimes& times = m_match_time(rhs);
-	if (times[0].get_unit() == Unit::NONE || times[1].get_unit() == Unit::NONE) {
-		if (times[0].get_unit() == Unit::NONE && times[1].get_unit() == Unit::NONE)
+	if (times.first().get_unit() == Unit::NONE || times.second().get_unit() == Unit::NONE) {
+		if (times.first().get_unit() == Unit::NONE && times.second().get_unit() == Unit::NONE)
 			return true;
 		else
 			return false;
 	}
-	return times[0].get_time() == times[1].get_time();
+	return times.first().get_time() == times.second().get_time();
 }
 
 void TimeInterval::downcast(const uint32_t type_max) {
-	if (is_none()) return;
+	if (is_none()) 
+		return;
 
 	while (get_time() > type_max) {
 		switch (m_unit) {
@@ -56,7 +59,8 @@ void TimeInterval::downcast(const uint32_t type_max) {
 
 const TimeInterval TimeInterval::m_multiply(const uint32_t num) const {
 	const uint64_t res = static_cast<uint64_t>(m_time)* num;
-	if (res > UINT32_MAX) return TimeInterval{ Unit::NONE, 0 };
+	if (res > UINT32_MAX) 
+		return TimeInterval{ Unit::NONE, 0 };
 	return { m_unit, m_time * num };
 }
 
@@ -64,8 +68,10 @@ TimeInterval::TwoTimes TimeInterval::m_match_time(const TimeInterval& rhs) const
 	// error check
 	if (get_unit() == Unit::NONE || rhs.get_unit() == Unit::NONE)
 		return { TimeInterval(Unit::NONE, 0), TimeInterval(Unit::NONE, 0) };
-	if (m_unit > rhs.m_unit) return { m_match_unit(rhs, *this),  rhs };
-	else if (m_unit < rhs.m_unit) return { *this,  m_match_unit(*this, rhs) };
+	if (m_unit > rhs.m_unit) 
+		return { m_match_unit(rhs, *this),  rhs };
+	else if (m_unit < rhs.m_unit) 
+		return { *this,  m_match_unit(*this, rhs) };
 	else return { *this, rhs };
 }
 
@@ -87,10 +93,10 @@ TimeInterval TimeInterval::m_match_unit(const TimeInterval& smaller_unit, const 
 		case Unit::SECOND:
 		case Unit::MILLISECOND:
 			time_index *= 1000; break;
-
 		}
 		unit_index--;
-		if (time_index > UINT32_MAX) return { Unit::NONE, 0 };
+		if (time_index > UINT32_MAX) 
+			return { Unit::NONE, 0 };
 	}
 	return { unit_index, static_cast<uint32_t>(time_index) };
 }
